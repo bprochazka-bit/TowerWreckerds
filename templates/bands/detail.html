@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ band.name }} · Music World{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="eyebrow">02 · band · {{ band.status }}</span>
+    <h1>{{ band.name }}</h1>
+    <p class="sub">{{ band.primary_genre or '—' }}{% if band.formed_on %} · formed {{ band.formed_on }}{% endif %}</p>
+  </div>
+  <form method="post" action="{{ url_for('bands.delete', band_id=band.id) }}"
+        onsubmit="return confirm('Delete this band?')">
+    <button class="btn danger sm" type="submit">Delete</button>
+  </form>
+</div>
+
+<div class="panel">
+  <div class="strip-label">Backstory</div>
+  <p>{{ band.backstory or 'No backstory.' }}</p>
+</div>
+
+<div class="grid cols-2" style="margin-top:16px">
+  <div class="panel">
+    <div class="strip-label">Lineup</div>
+    {% if members %}
+      <div class="members">
+      {% for m in members %}
+        <div class="member">
+          <span class="inst">{{ m.instrument or '—' }}</span>
+          <a href="{{ url_for('artists.detail', artist_id=m.id) }}" style="flex:1">{{ m.name }}</a>
+          {% if m.left_on %}<span class="pill">left</span>{% endif %}
+          <span class="muted mono" style="font-size:11px">{{ m.region or '' }}</span>
+        </div>
+      {% endfor %}
+      </div>
+    {% else %}<p class="muted">No members.</p>{% endif %}
+  </div>
+  <div class="panel">
+    <div class="strip-label">Releases</div>
+    {% if releases %}
+      <div class="members">
+      {% for r in releases %}
+        <div class="member"><span class="pill {{ r.status }}">{{ r.type }}</span>
+          <a href="{{ url_for('albums.detail', album_id=r.id) }}">{{ r.title }}</a></div>
+      {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">No releases.</p>
+    {% endif %}
+    <div class="btn-row"><a class="btn sm" href="{{ url_for('albums.new_album') }}">Design a release →</a></div>
+  </div>
+</div>
+{% endblock %}

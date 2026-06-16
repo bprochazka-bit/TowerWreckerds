@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}New person · Music World{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <span class="eyebrow">01 · profiles</span>
+  <h1>New person</h1>
+  <p class="sub">Generate a persona from a few hints, or write one yourself.</p>
+</div></div>
+
+<div class="grid cols-2">
+  <div class="panel">
+    <div class="strip-label">Generate with the LLM</div>
+    <form class="gen-form" data-working="Inventing persona" method="post"
+          action="{{ url_for('artists.generate') }}">
+      <label>Name hint <span class="muted">(optional)</span></label>
+      <input type="text" name="name" placeholder="leave blank to let the model name them">
+      <div class="field-row">
+        <div>
+          <label>Primary genre</label>
+          <select name="primary_genre">
+            <option value="">— any —</option>
+            {% for g in genres %}<option>{{ g.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Region hint</label>
+          <input type="text" name="region" placeholder="e.g. Lagos, Glasgow">
+        </div>
+      </div>
+      <label>Vibe / direction</label>
+      <textarea name="vibe" placeholder="e.g. burned-out former child prodigy turning to ambient folk"></textarea>
+      <div class="btn-row"><button class="btn primary" type="submit">Generate persona</button></div>
+    </form>
+  </div>
+
+  <div class="panel">
+    <div class="strip-label">Write it by hand</div>
+    <form method="post" action="{{ url_for('artists.create_artist') }}">
+      <label>Name</label>
+      <input type="text" name="name" required>
+      <div class="field-row">
+        <div><label>Primary genre</label>
+          <select name="primary_genre">
+            <option value="">—</option>
+            {% for g in genres %}<option>{{ g.name }}</option>{% endfor %}
+          </select></div>
+        <div><label>Region</label><input type="text" name="region"></div>
+      </div>
+      <label>Persona</label>
+      <textarea name="persona"></textarea>
+      <label>Backstory</label>
+      <textarea name="backstory"></textarea>
+      <div class="field-row-3">
+        <div><label>Consistency</label>
+          <select name="consistency_mode">
+            <option value="prompt_only">prompt only</option>
+            <option value="lora">LoRA (auteur)</option>
+          </select></div>
+        <div><label>Stage</label>
+          <select name="stage">
+            <option>emerging</option><option>rising</option>
+            <option>established</option><option>veteran</option>
+          </select></div>
+        <div><label>Refinement</label>
+          <input type="number" name="refinement" step="0.05" min="0" max="1" value="0.3"></div>
+      </div>
+      <div class="btn-row"><button class="btn" type="submit">Save person</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}

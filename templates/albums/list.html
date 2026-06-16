@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Albums · Music World{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="eyebrow">03 · releases</span>
+    <h1>Albums</h1>
+    <p class="sub">Releases seeded with a performer, an ethos, and style tags — each one a shaped tracklist.</p>
+  </div>
+  <a class="btn primary" href="{{ url_for('albums.new_album') }}">+ Design album</a>
+</div>
+
+{% if albums %}
+<div class="grid cols-3">
+  {% for a in albums %}
+  <a class="card" href="{{ url_for('albums.detail', album_id=a.id) }}">
+    <div class="title">{{ a.title or 'Untitled' }}</div>
+    <div class="meta">{{ a.type }} · {{ owners[a.id] }}
+      <span class="pill {{ a.status }}" style="margin-left:6px">{{ a.status }}</span></div>
+    <p>{{ a.concept or 'No concept yet.' }}</p>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty"><span class="eyebrow">empty channel</span>
+  No releases yet. <a href="{{ url_for('albums.new_album') }}">Design the first one →</a></div>
+{% endif %}
+{% endblock %}

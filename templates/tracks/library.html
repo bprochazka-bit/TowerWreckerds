@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Tracks · Music World{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="eyebrow">04 · library</span>
+    <h1>Tracks</h1>
+    <p class="sub">Everything briefed or rendered — album cuts and free-standing songs.</p>
+  </div>
+  <a class="btn primary" href="{{ url_for('tracks.new_track') }}">+ Cut a track</a>
+</div>
+
+{% if tracks %}
+<div class="panel">
+  <div class="strip-label">{{ tracks|length }} tracks</div>
+  <div class="members">
+  {% for t in tracks %}
+    <div class="member">
+      <span class="pill {{ t.status }}">{{ t.status }}</span>
+      <a href="{{ url_for('tracks.detail', track_id=t.id) }}" style="flex:1">{{ t.title }}</a>
+      <span class="muted mono" style="font-size:11px">
+        {% if t.release_title %}{{ t.release_title }}{% else %}freeform{% endif %}</span>
+      {% if t.audio_path %}<span class="mono" style="color:var(--green)">♪</span>{% endif %}
+    </div>
+  {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="empty"><span class="eyebrow">empty channel</span>
+  No tracks yet. Design an album or
+  <a href="{{ url_for('tracks.new_track') }}">write one from a prompt →</a></div>
+{% endif %}
+{% endblock %}

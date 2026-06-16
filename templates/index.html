@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · Music World{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="eyebrow">Control surface</span>
+    <h1>The scene at a glance</h1>
+    <p class="sub">A local pipeline that invents artists, shapes albums, and renders
+      tracks through llama.cpp and ACE-Step. Start by creating people, form them into
+      bands, then design a release and cut the tracks.</p>
+  </div>
+</div>
+
+<div class="grid cols-4">
+  <div class="stat"><div class="k">People</div><div class="v">{{ stats.artists }}</div></div>
+  <div class="stat"><div class="k">Bands</div><div class="v">{{ stats.bands }}</div></div>
+  <div class="stat"><div class="k">Releases</div><div class="v">{{ stats.albums }}</div></div>
+  <div class="stat"><div class="k">Rendered</div><div class="v">{{ stats.rendered }}<span class="unit"> / {{ stats.tracks }}</span></div></div>
+</div>
+
+<h2>Quick actions</h2>
+<div class="grid cols-4">
+  <a class="card" href="{{ url_for('artists.new_artist') }}">
+    <div class="title">New person</div>
+    <div class="meta">01 · profile</div>
+    <p>Hand-write or generate an artist persona, backstory, and genre.</p></a>
+  <a class="card" href="{{ url_for('bands.new_band') }}">
+    <div class="title">New band</div>
+    <div class="meta">02 · lineup</div>
+    <p>Assemble from existing people or invent a whole group from scratch.</p></a>
+  <a class="card" href="{{ url_for('albums.new_album') }}">
+    <div class="title">Design album</div>
+    <div class="meta">03 · tracklist</div>
+    <p>Seed with a performer, give it an ethos and tags, generate the tracklist.</p></a>
+  <a class="card" href="{{ url_for('tracks.new_track') }}">
+    <div class="title">Cut a track</div>
+    <div class="meta">04 · render</div>
+    <p>Write a song from a free-text prompt and render candidates.</p></a>
+</div>
+
+<div class="grid cols-2" style="margin-top:24px">
+  <div class="panel">
+    <div class="strip-label">Latest tracks</div>
+    {% if recent_tracks %}
+      <div class="members">
+      {% for t in recent_tracks %}
+        <div class="member">
+          <span class="pill {{ t.status }}">{{ t.status }}</span>
+          <a href="{{ url_for('tracks.detail', track_id=t.id) }}" style="flex:1">{{ t.title }}</a>
+          {% if t.audio_path %}<span class="mono muted" style="font-size:11px">♪</span>{% endif %}
+        </div>
+      {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">No tracks yet.</p>
+    {% endif %}
+  </div>
+  <div class="panel">
+    <div class="strip-label">Latest releases</div>
+    {% if recent_albums %}
+      <div class="members">
+      {% for a in recent_albums %}
+        <div class="member">
+          <span class="pill {{ a.status }}">{{ a.type }}</span>
+          <a href="{{ url_for('albums.detail', album_id=a.id) }}" style="flex:1">{{ a.title or 'Untitled' }}</a>
+        </div>
+      {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">No releases yet.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

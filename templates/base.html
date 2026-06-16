@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Music World{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="{{ url_for('static', filename='js/htmx.min.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="brand">
+      <span class="led"></span>
+      <div><b>Music World</b><small>console</small></div>
+    </div>
+    <nav>
+      <a href="{{ url_for('index') }}">Dashboard <span class="tag">00</span></a>
+      <a href="{{ url_for('artists.list_artists') }}">People <span class="tag">01</span></a>
+      <a href="{{ url_for('bands.list_bands') }}">Bands <span class="tag">02</span></a>
+      <a href="{{ url_for('albums.list_albums') }}">Albums <span class="tag">03</span></a>
+      <a href="{{ url_for('tracks.library') }}">Tracks <span class="tag">04</span></a>
+      <a href="{{ url_for('admin.admin_home') }}">Admin <span class="tag">SYS</span></a>
+    </nav>
+    <div class="rail-foot">
+      llama.cpp · ace-step<br>local pipeline
+    </div>
+  </aside>
+
+  <main class="work">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flashes">
+          {% for cat, msg in messages %}
+            <div class="flash {{ cat }}">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+</body>
+</html>

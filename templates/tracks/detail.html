@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}{{ track.title or 'Track' }} · Music World{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="eyebrow">04 · track{% if release %} · {{ release.title }}{% else %} · freeform{% endif %}</span>
+    <h1>{{ track.title or 'Untitled' }}</h1>
+    {% if track.subject %}<p class="sub">{{ track.subject }}</p>{% endif %}
+  </div>
+  <form method="post" action="{{ url_for('tracks.delete', track_id=track.id) }}"
+        onsubmit="return confirm('Delete this track?')">
+    <button class="btn danger sm" type="submit">Delete</button>
+  </form>
+</div>
+
+<div class="statusbar">
+  <span class="pill {{ track.status }}">{{ track.status }}</span>
+  {% if track.role %}<span class="mono muted">{{ track.role }}</span>{% endif %}
+  {% if release %}<span class="mono muted">track {{ '%02d'|format(track.position) }}</span>{% endif %}
+  <span class="mono muted">{{ track.source }}</span>
+</div>
+
+<div class="grid cols-2" style="margin-top:16px">
+  <div class="panel">
+    <div class="strip-label">Production brief</div>
+    {% if track.summary %}<p>{{ track.summary }}</p>{% endif %}
+    <div class="spec">
+      {% if track.tempo %}<div><span class="k">Tempo</span><span class="v">{{ track.tempo }} bpm</span></div>{% endif %}
+      {% if track.song_key %}<div><span class="k">Key</span><span class="v">{{ track.song_key }}</span></div>{% endif %}
+      {% if track.mood %}<div><span class="k">Mood</span><span class="v">{{ track.mood }}</span></div>{% endif %}
+      {% if track.duration %}<div><span class="k">Length</span><span class="v">{{ '%d:%02d'|format(track.duration // 60, track.duration % 60) }}</span></div>{% endif %}
+      {% if track.seed %}<div><span class="k">Seed</span><span class="v mono">{{ track.seed }}</span></div>{% endif %}
+    </div>
+    {% if style_tags %}<div class="chips" style="margin-top:12px">
+      {% for c in style_tags %}<span class="chip">{{ c }}</span>{% endfor %}
+    </div>{% endif %}
+    {% if environmentals %}<div class="chips" style="margin-top:8px">
+      {% for e in environmentals %}<span class="chip teal">{{ e }}</span>{% endfor %}
+    </div>{% endif %}
+  </div>
+
+  <div class="panel">
+    <div class="strip-label">Lyrics</div>
+    {% if track.lyrics %}
+      <pre class="lyrics">{{ track.lyrics }}</pre>
+    {% else %}
+      <p class="muted">No lyrics written yet.</p>
+      {% if release %}
+      <form class="gen-form" data-working="Writing lyrics" method="post"
+            action="{{ url_for('tracks.brief', track_id=track.id) }}">
+        <button class="btn" type="submit">Write lyrics &amp; full brief</button>
+      </form>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<div class="panel" style="margin-top:16px">
+  <div class="strip-label">Master take</div>
+  {% if track.audio_path %}
+    <audio controls preload="none" src="{{ track.audio_path|audio_url }}"></audio>
+    <form method="post" action="{{ url_for('tracks.trim', track_id=track.id) }}" style="margin-top:8px">
+      <button class="btn sm ghost" type="submit">Trim trailing noise</button>
+    </form>
+  {% else %}
+    <p class="muted">Not rendered yet.</p>
+  {% endif %}
+  <form class="gen-form" data-working="Rendering candidates through ACE-Step" method="post"
+        action="{{ url_for('tracks.render', track_id=track.id) }}" style="margin-top:12px">
+    <button class="btn primary" type="submit">
+      {{ 'Re-render' if track.audio_path else 'Render audio' }}</button>
+    <span class="muted mono" style="font-size:11px;margin-left:10px">
+      generates candidates, scores integrity, keeps the best</span>
+  </form>
+</div>
+
+{% if candidates %}
+<div class="panel" style="margin-top:16px">
+  <div class="strip-label">Candidates · {{ candidates|length }}</div>
+  <div class="cand-list">
+    {% for c in candidates %}
+    <div class="cand{% if c.selected %} sel{% endif %}">
+      <div class="cand-head">
+        <span class="score">{{ '%.2f'|format(c.integrity or 0) }}</span>
+        <span class="mono muted">seed {{ c.seed }}</span>
+        {% if c.selected %}<span class="pill rendered">master</span>{% endif %}
+        {% if c.note %}<span class="muted" style="font-size:12px">{{ c.note }}</span>{% endif %}
+      </div>
+      {% if c.audio_path %}
+        <audio controls preload="none" src="{{ c.audio_path|audio_url }}"></audio>
+      {% else %}
+        <span class="muted">no audio</span>
+      {% endif %}
+      {% if c.audio_path and not c.selected %}
+      <form method="post" action="{{ url_for('tracks.select_candidate', track_id=track.id, candidate_id=c.id) }}">
+        <button class="btn sm ghost" type="submit">Set as master</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

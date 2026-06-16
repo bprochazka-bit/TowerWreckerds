@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}New band · Music World{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <span class="eyebrow">02 · lineups</span>
+  <h1>New band</h1>
+  <p class="sub">Two ways in: invent the whole group from scratch, or seed it with people you already have.</p>
+</div></div>
+
+<div class="grid cols-2">
+  <div class="panel">
+    <div class="strip-label">Invent from scratch</div>
+    <p class="muted" style="font-size:13px">The model creates the band <em>and</em> every member as a new person.</p>
+    <form class="gen-form" data-working="Forming the band" method="post"
+          action="{{ url_for('bands.generate_scratch') }}">
+      <label>Name hint <span class="muted">(optional)</span></label>
+      <input type="text" name="name">
+      <div class="field-row">
+        <div><label>Genre</label>
+          <select name="primary_genre">
+            <option value="">— any —</option>
+            {% for g in genres %}<option>{{ g.name }}</option>{% endfor %}
+          </select></div>
+        <div><label>Members</label>
+          <input type="number" name="size" value="4" min="1" max="8"></div>
+      </div>
+      <label>Vibe / direction</label>
+      <textarea name="vibe" placeholder="e.g. four art-school dropouts making confrontational post-punk"></textarea>
+      <div class="btn-row"><button class="btn primary" type="submit">Generate band + lineup</button></div>
+    </form>
+  </div>
+
+  <div class="panel">
+    <div class="strip-label">Assemble from existing people</div>
+    {% if artists %}
+    <p class="muted" style="font-size:13px">Pick members and assign instruments. The model names and frames the band around them.</p>
+    <form class="gen-form" data-working="Naming the band" method="post"
+          action="{{ url_for('bands.assemble') }}">
+      <div class="field-row">
+        <div><label>Name hint</label><input type="text" name="name"></div>
+        <div><label>Genre hint</label>
+          <select name="primary_genre">
+            <option value="">—</option>
+            {% for g in genres %}<option>{{ g.name }}</option>{% endfor %}
+          </select></div>
+      </div>
+      <label>Members</label>
+      <div class="members" style="max-height:280px;overflow:auto">
+        {% for a in artists %}
+        <div class="member">
+          <input type="checkbox" name="artist_id" value="{{ a.id }}" id="a{{ a.id }}" style="width:auto">
+          <label for="a{{ a.id }}" style="margin:0;flex:1;text-transform:none;letter-spacing:0;font-family:var(--sans);color:var(--text)">
+            {{ a.name }} <span class="muted">· {{ a.primary_genre or '—' }}</span></label>
+          <input type="text" name="instrument_{{ a.id }}" placeholder="instrument" style="width:130px">
+        </div>
+        {% endfor %}
+      </div>
+      <div class="btn-row"><button class="btn primary" type="submit">Assemble band</button></div>
+    </form>
+    {% else %}
+      <p class="muted">No people to assemble yet.</p>
+      <a class="btn sm" href="{{ url_for('artists.new_artist') }}">Create people first →</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

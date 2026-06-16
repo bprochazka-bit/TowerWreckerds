@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Design album · Music World{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <span class="eyebrow">03 · releases</span>
+  <h1>Design an album</h1>
+  <p class="sub">Seed it with a band or a solo artist, describe the ethos, pick style tags.
+    The model returns a titled concept and a full tracklist — each track with a role,
+    subject, summary, tempo, mood, and length.</p>
+</div></div>
+
+<div class="panel">
+  <form class="gen-form" data-working="Shaping the tracklist" method="post"
+        action="{{ url_for('albums.generate') }}">
+    <div class="strip-label">Performer</div>
+    <label>Seed with</label>
+    <select name="owner" required>
+      <option value="">— choose a band or artist —</option>
+      {% if bands %}<optgroup label="Bands">
+        {% for b in bands %}<option value="band:{{ b.id }}">{{ b.name }} ({{ b.primary_genre or '—' }})</option>{% endfor %}
+      </optgroup>{% endif %}
+      {% if artists %}<optgroup label="Solo artists">
+        {% for a in artists %}<option value="artist:{{ a.id }}">{{ a.name }} ({{ a.primary_genre or '—' }})</option>{% endfor %}
+      </optgroup>{% endif %}
+    </select>
+
+    <div class="field-row-3">
+      <div><label>Release type</label>
+        <select name="type">
+          <option value="album">album</option>
+          <option value="ep">EP</option>
+          <option value="single">single</option>
+        </select></div>
+      <div><label>Track count <span class="muted">(optional)</span></label>
+        <input type="number" name="track_count" min="1" max="20" placeholder="auto"></div>
+      <div></div>
+    </div>
+
+    <label>Ethos / concept</label>
+    <textarea name="ethos" placeholder="The thread that ties the record together — themes, narrative arc, what the artist is reaching for."></textarea>
+
+    <div class="strip-label" style="margin-top:22px">Style tags</div>
+    <div class="tag-select">
+      {% for t in style_tags %}
+        <input type="checkbox" name="style_tags" value="{{ t.name }}" id="t{{ loop.index }}">
+        <label for="t{{ loop.index }}">{{ t.name }}</label>
+      {% endfor %}
+    </div>
+    <label style="margin-top:16px">Extra tags <span class="muted">(comma separated)</span></label>
+    <input type="text" name="extra_tags" placeholder="e.g. shoegaze, tape saturation, mellotron">
+
+    <div class="btn-row"><button class="btn primary" type="submit">Generate concept + tracklist</button></div>
+  </form>
+</div>
+{% endblock %}

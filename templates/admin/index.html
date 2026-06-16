@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Admin · Music World{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <span class="eyebrow">00 · console</span>
+  <h1>Admin</h1>
+  <p class="sub">Point the app at your LLM and ACE-Step backends, then manage the
+    genre and style-tag taxonomy the generators draw from. Settings are stored in
+    the database and read live on every generation.</p>
+</div></div>
+
+<form method="post" action="{{ url_for('admin.save_settings') }}">
+  <div class="grid cols-2">
+    <div class="panel">
+      <div class="strip-label">Language model</div>
+      <label>Backend</label>
+      <select name="llm_backend">
+        {% set be = settings.llm_backend %}
+        <option value="llamacpp" {{ 'selected' if be == 'llamacpp' }}>llama.cpp server (OpenAI-compatible)</option>
+        <option value="ollama" {{ 'selected' if be == 'ollama' }}>Ollama</option>
+        <option value="openai" {{ 'selected' if be == 'openai' }}>OpenAI-compatible endpoint</option>
+      </select>
+
+      <label>Base URL</label>
+      <input type="text" name="llm_base_url" value="{{ settings.llm_base_url }}"
+             placeholder="http://localhost:8080">
+
+      <label>Model</label>
+      <input type="text" name="llm_model" value="{{ settings.llm_model }}"
+             placeholder="e.g. llama-3.1-8b-instruct  ·  leave blank for llama.cpp default">
+
+      <label>API key <span class="muted">(if required)</span></label>
+      <input type="password" name="llm_api_key" value="{{ settings.llm_api_key }}"
+             placeholder="optional — local servers usually need none">
+
+      <div class="field-row">
+        <div><label>Temperature</label>
+          <input type="number" step="0.05" min="0" max="2" name="llm_temperature"
+                 value="{{ settings.llm_temperature }}"></div>
+        <div><label>Max tokens</label>
+          <input type="number" min="64" max="8192" name="llm_max_tokens"
+                 value="{{ settings.llm_max_tokens }}"></div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn ghost sm" type="button"
+                hx-post="{{ url_for('admin.test_llm') }}"
+                hx-target="#llm-status" hx-swap="innerHTML">Test connection</button>
+        <span id="llm-status"><span class="status">not tested</span></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="strip-label">ACE-Step (audio)</div>
+      <label>Adapter base URL</label>
+      <input type="text" name="acestep_base_url" value="{{ settings.acestep_base_url }}"
+             placeholder="http://localhost:8765">
+
+      <div class="field-row">
+        <div><label>Candidates per render</label>
+          <input type="number" min="1" max="8" name="acestep_candidates"
+                 value="{{ settings.acestep_candidates }}"></div>
+        <div><label>Duration ceiling (s)</label>
+          <input type="number" min="30" max="600" name="acestep_duration_ceiling"
+                 value="{{ settings.acestep_duration_ceiling }}"></div>
+      </div>
+
+      <label>Output format</label>
+      <select name="acestep_format">
+        {% set fmt = settings.acestep_format %}
+        <option value="wav16" {{ 'selected' if fmt in ('wav16','wav') }}>wav16 (enables integrity QA)</option>
+        <option value="wav24" {{ 'selected' if fmt == 'wav24' }}>wav24</option>
+        <option value="wav32" {{ 'selected' if fmt == 'wav32' }}>wav32</option>
+        <option value="mp3" {{ 'selected' if fmt == 'mp3' }}>mp3</option>
+      </select>
+
+      <label class="check" style="margin-top:16px">
+        <input type="checkbox" name="acestep_trim_noise" {{ 'checked' if settings.acestep_trim_noise == '1' }}>
+        <span>Trim trailing white noise / silence from rendered tracks (WAV only)</span>
+      </label>
+
+      <label class="check" style="margin-top:16px">
+        <input type="checkbox" name="mock_mode" {{ 'checked' if settings.mock_mode == '1' }}>
+        <span>Mock mode — synthesize placeholder audio locally, no ACE-Step required</span>
+      </label>
+
+      <div class="btn-row">
+        <button class="btn ghost sm" type="button"
+                hx-post="{{ url_for('admin.test_acestep') }}"
+                hx-target="#ace-status" hx-swap="innerHTML">Test connection</button>
+        <span id="ace-status"><span class="status">not tested</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-row"><button class="btn primary" type="submit">Save settings</button></div>
+</form>
+
+<div id="taxonomy" class="grid cols-2" style="margin-top:24px">
+  <div class="panel">
+    <div class="strip-label">Genres · {{ genres|length }}</div>
+    <div class="members">
+      {% for g in genres %}
+      <div class="member">
+        <span style="flex:1">{{ g.name }}</span>
+        <form method="post" action="{{ url_for('admin.delete_genre', genre_id=g.id) }}"
+              onsubmit="return confirm('Remove genre {{ g.name }}?')">
+          <button class="btn sm ghost" type="submit">✕</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    <form method="post" action="{{ url_for('admin.add_genre') }}" style="margin-top:14px">
+      <label>Add genre</label>
+      <input type="text" name="name" placeholder="name" required>
+      <input type="text" name="description" placeholder="short description (optional)">
+      <input type="text" name="base_style_tags" placeholder="base style tags, comma separated (optional)">
+      <div class="btn-row"><button class="btn sm" type="submit">Add genre</button></div>
+    </form>
+  </div>
+
+  <div class="panel">
+    <div class="strip-label">Style tags · {{ style_tags|length }}</div>
+    <div class="members" style="max-height:320px;overflow:auto">
+      {% for s in style_tags %}
+      <div class="member">
+        <span style="flex:1">{{ s.name }}</span>
+        <span class="inst">{{ s.category }}</span>
+        <form method="post" action="{{ url_for('admin.delete_style_tag', tag_id=s.id) }}">
+          <button class="btn sm ghost" type="submit">✕</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    <form method="post" action="{{ url_for('admin.add_style_tag') }}" style="margin-top:14px">
+      <label>Add style tag</label>
+      <input type="text" name="name" placeholder="name" required>
+      <select name="category">
+        <option value="mood">mood</option>
+        <option value="instrumentation">instrumentation</option>
+        <option value="era">era</option>
+        <option value="production">production</option>
+        <option value="crossover">crossover</option>
+        <option value="vocal">vocal</option>
+      </select>
+      <input type="text" name="acestep_phrases" placeholder="ACE-Step phrases, comma separated (optional)">
+      <div class="btn-row"><button class="btn sm" type="submit">Add tag</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Write a track · Music World{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <span class="eyebrow">04 · freeform</span>
+  <h1>Write a track from a prompt</h1>
+  <p class="sub">Describe the song in plain language. The model returns a full brief —
+    title, subject, mood, tempo, key, style cues, and lyrics — ready to render.
+    Optionally attribute it to an existing performer so their persona colours the writing.</p>
+</div></div>
+
+<div class="panel">
+  <form class="gen-form" data-working="Writing the song" method="post"
+        action="{{ url_for('tracks.freeform') }}">
+    <div class="strip-label">Prompt</div>
+    <label>What is the song?</label>
+    <textarea name="prompt" rows="5" required
+      placeholder="e.g. A slow-burning desert-rock ballad about leaving a town you swore you'd never return to. Baritone vocal, brushed drums, a long instrumental outro that opens up like a sunrise."></textarea>
+
+    <label style="margin-top:16px">Attribute to <span class="muted">(optional)</span></label>
+    <select name="owner">
+      <option value="">— no performer / one-off —</option>
+      {% if bands %}<optgroup label="Bands">
+        {% for b in bands %}<option value="band:{{ b.id }}">{{ b.name }}</option>{% endfor %}
+      </optgroup>{% endif %}
+      {% if artists %}<optgroup label="Solo artists">
+        {% for a in artists %}<option value="artist:{{ a.id }}">{{ a.name }}</option>{% endfor %}
+      </optgroup>{% endif %}
+    </select>
+
+    <div class="btn-row"><button class="btn primary" type="submit">Write the brief</button></div>
+  </form>
+</div>
+{% endblock %}

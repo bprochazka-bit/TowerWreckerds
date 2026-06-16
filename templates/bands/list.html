@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Bands · Music World{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="eyebrow">02 · lineups</span>
+    <h1>Bands</h1>
+    <p class="sub">Groups assembled from existing people, or invented whole-cloth by the model.</p>
+  </div>
+  <a class="btn primary" href="{{ url_for('bands.new_band') }}">+ New band</a>
+</div>
+
+{% if bands %}
+<div class="grid cols-3">
+  {% for b in bands %}
+  <a class="card" href="{{ url_for('bands.detail', band_id=b.id) }}">
+    <div class="title">{{ b.name }}</div>
+    <div class="meta">{{ b.primary_genre or '—' }} · {{ counts[b.id] }} members · {{ b.status }}</div>
+    <p>{{ b.backstory or 'No backstory yet.' }}</p>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty"><span class="eyebrow">empty channel</span>
+  No bands yet. <a href="{{ url_for('bands.new_band') }}">Form the first one →</a></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}People · Music World{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="eyebrow">01 · profiles</span>
+    <h1>People</h1>
+    <p class="sub">The individuals who make up the scene — solo acts and band members alike.</p>
+  </div>
+  <a class="btn primary" href="{{ url_for('artists.new_artist') }}">+ New person</a>
+</div>
+
+{% if artists %}
+<div class="grid cols-3">
+  {% for a in artists %}
+  <a class="card" href="{{ url_for('artists.detail', artist_id=a.id) }}">
+    <div class="title">{{ a.name }}</div>
+    <div class="meta">{{ a.primary_genre or '—' }} · {{ a.region or 'unknown region' }} · {{ a.type }}</div>
+    <p>{{ a.persona or a.backstory or 'No persona written yet.' }}</p>
+    <div class="meta" style="margin-top:10px">stage: {{ a.stage }} · refinement {{ '%.2f'|format(a.refinement or 0) }}</div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty"><span class="eyebrow">empty channel</span>
+  No people yet. <a href="{{ url_for('artists.new_artist') }}">Create the first one →</a></div>
+{% endif %}
+{% endblock %}

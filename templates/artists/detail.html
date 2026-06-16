@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ artist.name }} · Music World{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="eyebrow">01 · profile · {{ artist.type }}</span>
+    <h1>{{ artist.name }}</h1>
+    <p class="sub">{{ artist.primary_genre or '—' }}{% if artist.region %} · {{ artist.region }}{% endif %}</p>
+  </div>
+  <form method="post" action="{{ url_for('artists.delete', artist_id=artist.id) }}"
+        onsubmit="return confirm('Delete this person?')">
+    <button class="btn danger sm" type="submit">Delete</button>
+  </form>
+</div>
+
+<div class="grid cols-2">
+  <div class="panel">
+    <div class="strip-label">Persona</div>
+    <p>{{ artist.persona or 'No persona.' }}</p>
+    {% if artist.backstory %}<div class="divider"></div>
+      <div class="strip-label">Backstory</div><p>{{ artist.backstory }}</p>{% endif %}
+  </div>
+  <div class="panel">
+    <div class="strip-label">Career & identity</div>
+    <dl class="kv">
+      <dt>Stage</dt><dd>{{ artist.stage }}</dd>
+      <dt>Refinement</dt><dd>{{ '%.2f'|format(artist.refinement or 0) }}
+        <div class="meter"><span style="width:{{ (artist.refinement or 0) * 100 }}%"></span></div></dd>
+      <dt>Deviation</dt><dd>{{ '%.2f'|format(artist.deviation or 0) }}</dd>
+      <dt>Popularity</dt><dd>{{ '%.2f'|format(artist.popularity or 0) }}</dd>
+      <dt>Consistency</dt><dd>{{ artist.consistency_mode }}{% if artist.voice_seed %} · seed {{ artist.voice_seed }}{% endif %}</dd>
+      {% if secondary %}<dt>Also</dt><dd>{{ secondary|join(', ') }}</dd>{% endif %}
+    </dl>
+  </div>
+</div>
+
+<div class="grid cols-2" style="margin-top:16px">
+  <div class="panel">
+    <div class="strip-label">Bands</div>
+    {% if bands %}
+      <div class="members">
+      {% for b in bands %}
+        <div class="member"><span class="inst">{{ b.instrument or '—' }}</span>
+          <a href="{{ url_for('bands.detail', band_id=b.id) }}">{{ b.name }}</a></div>
+      {% endfor %}
+      </div>
+    {% else %}<p class="muted">Not in any band.</p>{% endif %}
+  </div>
+  <div class="panel">
+    <div class="strip-label">Releases</div>
+    {% if releases %}
+      <div class="members">
+      {% for r in releases %}
+        <div class="member"><span class="pill {{ r.status }}">{{ r.type }}</span>
+          <a href="{{ url_for('albums.detail', album_id=r.id) }}">{{ r.title }}</a></div>
+      {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">No releases.</p>
+      <a class="btn sm" href="{{ url_for('albums.new_album') }}">Design one →</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

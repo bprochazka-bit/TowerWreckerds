@@ -1,0 +1,20 @@
+# Music World — Debian 13 (trixie) apt dependencies.
+# Everything the web app needs is in the standard Debian repositories.
+# Install with:
+#
+#     sudo apt update
+#     sudo apt install python3 python3-flask python3-requests
+#
+# sqlite3 is part of the Python 3 standard library — no separate package needed.
+#
+# Package           Provides
+# ----------------  --------------------------------------------------
+python3           # interpreter (Debian 13 ships Python 3.13)
+python3-flask     # web framework
+python3-requests  # HTTP client for the LLM and ACE-Step backends
+#
+# Optional, only if you want to serve behind a production WSGI server:
+# python3-gunicorn
+#
+# The ACE-Step adapter (acestep_adapter.py) runs in ITS OWN environment
+# alongside the ACE-Step install and is NOT subject to the apt-only rule.

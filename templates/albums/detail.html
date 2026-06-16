@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ album.title }} · Music World{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="eyebrow">03 · {{ album.type }} · {{ owner_name }}</span>
+    <h1>{{ album.title or 'Untitled' }}</h1>
+    <p class="sub">{{ album.concept }}</p>
+  </div>
+  <form method="post" action="{{ url_for('albums.delete', album_id=album.id) }}"
+        onsubmit="return confirm('Delete this release and its tracks?')">
+    <button class="btn danger sm" type="submit">Delete</button>
+  </form>
+</div>
+
+<div class="grid cols-2">
+  <div class="panel">
+    <div class="strip-label">Inspiration</div>
+    <p>{{ album.inspiration or '—' }}</p>
+  </div>
+  <div class="panel">
+    <div class="strip-label">Ethos & tags</div>
+    {% if album.ethos %}<p style="font-size:13.5px">{{ album.ethos }}</p>{% endif %}
+    {% if style_tags %}<div class="chips">
+      {% for t in style_tags %}<span class="chip teal">{{ t }}</span>{% endfor %}
+    </div>{% endif %}
+  </div>
+</div>
+
+<div class="panel" style="margin-top:16px">
+  <div class="strip-label">Tracklist · {{ tracks|length }} tracks</div>
+  {% if tracks %}
+  <div class="tracklist">
+    {% for t in tracks %}
+    <div class="trk">
+      <div class="pos">{{ '%02d'|format(t.position) }}</div>
+      <div>
+        <div class="role">{{ t.role or 'track' }}</div>
+        <div class="tname"><a href="{{ url_for('tracks.detail', track_id=t.id) }}">{{ t.title }}</a></div>
+        {% if t.subject %}<div class="tsummary"><strong class="muted">Subject —</strong> {{ t.subject }}</div>{% endif %}
+        {% if t.summary %}<div class="tsummary">{{ t.summary }}</div>{% endif %}
+        {% set cues = t.style_tags|jload %}
+        {% if cues %}<div class="chips">{% for c in cues %}<span class="chip">{{ c }}</span>{% endfor %}</div>{% endif %}
+        <div class="tmeta">
+          {% if t.tempo %}<span>{{ t.tempo }} bpm</span>{% endif %}
+          {% if t.mood %}<span>{{ t.mood }}</span>{% endif %}
+          {% if t.duration %}<span>{{ '%d:%02d'|format(t.duration // 60, t.duration % 60) }}</span>{% endif %}
+        </div>
+      </div>
+      <div class="right">
+        <span class="pill {{ t.status }}">{{ t.status }}</span><br>
+        <a class="btn sm ghost" style="margin-top:8px" href="{{ url_for('tracks.detail', track_id=t.id) }}">Open →</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<p class="muted">No tracks.</p>{% endif %}
+</div>
+{% endblock %}
