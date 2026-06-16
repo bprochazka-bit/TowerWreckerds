@@ -9,6 +9,7 @@ from database import execute, jload, query
 from backends.llm import LLMError
 from backends.acestep import ACEStepError
 import generation
+from publish import publish_track, PublishError
 
 bp = Blueprint("tracks", __name__, url_prefix="/tracks")
 
@@ -46,6 +47,51 @@ def freeform():
         return redirect(url_for("tracks.new_track"))
     flash("Track brief written from prompt.", "ok")
     return redirect(url_for("tracks.detail", track_id=tid))
+
+
+@bp.route("/cover")
+def new_cover():
+    references = generation.list_reference_music()
+    artists = query("SELECT id, name FROM artist ORDER BY name")
+    bands = query("SELECT id, name FROM band ORDER BY name")
+    ref_path = generation.all_settings().get("reference_music_path", "")
+    return render_template("tracks/cover.html", references=references,
+                           artists=artists, bands=bands, ref_path=ref_path)
+
+
+@bp.route("/cover", methods=["POST"])
+def cover():
+    reference = request.form.get("reference", "").strip()
+    if not reference:
+        flash("Choose a reference track from the music repository.", "error")
+        return redirect(url_for("tracks.new_cover"))
+    owner = request.form.get("owner", "")
+    owner_type = owner_id = None
+    if ":" in owner:
+        owner_type, oid = owner.split(":", 1)
+        owner_id = int(oid)
+    try:
+        tid = generation.create_cover_track(
+            reference, owner_type, owner_id, request.form.get("notes", "").strip())
+    except LLMError as exc:
+        flash(f"Generation failed: {exc}", "error")
+        return redirect(url_for("tracks.new_cover"))
+    flash("Cover brief written from the reference track.", "ok")
+    return redirect(url_for("tracks.detail", track_id=tid))
+
+
+@bp.route("/<int:track_id>/publish", methods=["POST"])
+def publish(track_id):
+    try:
+        result = publish_track(track_id)
+    except PublishError as exc:
+        flash(f"Publish failed: {exc}", "error")
+        return redirect(url_for("tracks.detail", track_id=track_id))
+    msg = f"Published to {result['path']}."
+    if result.get("warning"):
+        msg += f" ({result['warning']})"
+    flash(msg, "ok")
+    return redirect(url_for("tracks.detail", track_id=track_id))
 
 
 @bp.route("/<int:track_id>/brief", methods=["POST"])

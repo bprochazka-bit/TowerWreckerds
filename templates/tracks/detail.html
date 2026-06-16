@@ -18,6 +18,7 @@
   {% if track.role %}<span class="mono muted">{{ track.role }}</span>{% endif %}
   {% if release %}<span class="mono muted">track {{ '%02d'|format(track.position) }}</span>{% endif %}
   <span class="mono muted">{{ track.source }}</span>
+  {% if track.reference_audio %}<span class="mono muted">cover of {{ track.reference_audio }}</span>{% endif %}
 </div>
 
 <div class="grid cols-2" style="margin-top:16px">
@@ -59,9 +60,17 @@
   <div class="strip-label">Master take</div>
   {% if track.audio_path %}
     <audio controls preload="none" src="{{ track.audio_path|audio_url }}"></audio>
-    <form method="post" action="{{ url_for('tracks.trim', track_id=track.id) }}" style="margin-top:8px">
-      <button class="btn sm ghost" type="submit">Trim trailing noise</button>
-    </form>
+    <div class="btn-row" style="margin-top:8px">
+      <form method="post" action="{{ url_for('tracks.trim', track_id=track.id) }}">
+        <button class="btn sm ghost" type="submit">Trim trailing noise</button>
+      </form>
+      <form class="gen-form" data-working="Publishing MP3 with cover art" method="post"
+            action="{{ url_for('tracks.publish', track_id=track.id) }}">
+        <button class="btn sm" type="submit">Publish MP3</button>
+      </form>
+    </div>
+    {% if track.published_path %}<p class="muted mono" style="font-size:11px;margin-top:6px">
+      published → {{ track.published_path }}</p>{% endif %}
   {% else %}
     <p class="muted">Not rendered yet.</p>
   {% endif %}

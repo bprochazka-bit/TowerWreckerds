@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Cover a song · Music World{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <span class="eyebrow">04 · cover</span>
+  <h1>Cover a song from the reference library</h1>
+  <p class="sub">Pick a track from your reference-music repository and have a
+    performer reinterpret it. The model writes a fresh brief — lyrics, mood,
+    tempo, style cues — recast in their voice, ready to render.</p>
+</div></div>
+
+{% if not ref_path %}
+<div class="panel">
+  <p class="muted">No reference-music repository is configured yet. Set a
+    <strong>Reference-music repository path</strong> in
+    <a href="{{ url_for('admin.admin_home') }}">Admin</a> first.</p>
+</div>
+{% elif not references %}
+<div class="panel">
+  <p class="muted">No audio files found under <span class="mono">{{ ref_path }}</span>.
+    Check the path in <a href="{{ url_for('admin.admin_home') }}">Admin</a>.</p>
+</div>
+{% else %}
+<div class="panel">
+  <form class="gen-form" data-working="Writing the cover" method="post"
+        action="{{ url_for('tracks.cover') }}">
+    <div class="strip-label">Reference track · {{ references|length }} available</div>
+    <label>Original song to cover</label>
+    <select name="reference" required>
+      {% for r in references %}<option value="{{ r.rel }}">{{ r.rel }}</option>{% endfor %}
+    </select>
+
+    <label style="margin-top:16px">Performer <span class="muted">(optional)</span></label>
+    <select name="owner">
+      <option value="">— no performer / one-off —</option>
+      {% if bands %}<optgroup label="Bands">
+        {% for b in bands %}<option value="band:{{ b.id }}">{{ b.name }}</option>{% endfor %}
+      </optgroup>{% endif %}
+      {% if artists %}<optgroup label="Solo artists">
+        {% for a in artists %}<option value="artist:{{ a.id }}">{{ a.name }}</option>{% endfor %}
+      </optgroup>{% endif %}
+    </select>
+
+    <label style="margin-top:16px">Direction <span class="muted">(optional)</span></label>
+    <textarea name="notes" rows="3"
+      placeholder="e.g. Slow it right down, strip it to piano and voice, make it mournful."></textarea>
+
+    <div class="btn-row"><button class="btn primary" type="submit">Write the cover brief</button></div>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

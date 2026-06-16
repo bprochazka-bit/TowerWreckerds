@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# Runtime database
+*.db
+
+# Generated media (keep the .gitkeep placeholders)
+/static/audio/*
+!/static/audio/.gitkeep
+/static/covers/*
+!/static/covers/.gitkeep
+
+# Published library export (default location)
+/published/

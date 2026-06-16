@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS release (
     ethos TEXT,
     style_tags TEXT,             -- json list
     release_date TEXT,
+    cover_path TEXT,             -- generated album cover image (relative path)
     status TEXT DEFAULT 'draft', -- draft | tracklist | producing | published
     created_at TEXT
 );
@@ -109,8 +110,10 @@ CREATE TABLE IF NOT EXISTS track (
     duration INTEGER DEFAULT 180,
     seed INTEGER,
     audio_path TEXT,
+    reference_audio TEXT,           -- reference track this is a cover of (relative to ref library)
+    published_path TEXT,            -- where the published MP3 was last written
     status TEXT DEFAULT 'briefed',  -- briefed | producing | rendered | failed | published
-    source TEXT DEFAULT 'album',    -- album | freeform
+    source TEXT DEFAULT 'album',    -- album | freeform | cover
     created_at TEXT,
     FOREIGN KEY (release_id) REFERENCES release(id) ON DELETE SET NULL
 );
@@ -193,6 +196,17 @@ DEFAULT_SETTINGS = {
     "acestep_format": "wav16",
     "acestep_trim_noise": "1",
     "mock_mode": "1",                     # 1 = synthesize placeholders, no live backends
+    # Reference-music repository: a folder of existing audio used as a reference
+    # when generating cover versions of songs.
+    "reference_music_path": "",
+    # stable-diffusion.cpp (sd.cpp) image generation of bands/artists/album covers.
+    "sdcpp_path": "",                     # path to the sd / sd.cpp executable
+    "sdcpp_model": "",                    # path to the diffusion model weights
+    "sdcpp_steps": "20",
+    "sdcpp_size": "512",                  # square output, px
+    "sdcpp_cfg": "7.0",
+    # Where published MP3s + covers are written. Blank => <app>/published.
+    "publish_path": "",
 }
 
 
@@ -274,11 +288,30 @@ SEED_STYLE_TAGS = [
 ]
 
 
+# Columns added after the initial release. CREATE TABLE IF NOT EXISTS won't
+# alter an existing table, so add any missing columns on startup. Keep this in
+# sync with the SCHEMA above.
+MIGRATIONS = [
+    ("track", "reference_audio", "TEXT"),
+    ("track", "published_path", "TEXT"),
+    ("release", "cover_path", "TEXT"),
+]
+
+
+def _migrate(conn):
+    for table, column, coltype in MIGRATIONS:
+        cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+    conn.commit()
+
+
 def init_db(seed=True):
     conn = get_db()
     try:
         conn.executescript(SCHEMA)
         conn.commit()
+        _migrate(conn)
     finally:
         conn.close()
 

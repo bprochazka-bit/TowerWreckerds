@@ -6,7 +6,9 @@ from flask import (
 
 from database import execute, jload, query
 from backends.llm import LLMError
+from backends.imagegen import ImageGenError
 import generation
+from publish import publish_album, PublishError
 
 bp = Blueprint("albums", __name__, url_prefix="/albums")
 
@@ -69,6 +71,31 @@ def detail(album_id):
     owner_name = _owner_name(album["owner_type"], album["owner_id"])
     return render_template("albums/detail.html", album=album, tracks=tracks,
                            owner_name=owner_name, style_tags=jload(album["style_tags"]))
+
+
+@bp.route("/<int:album_id>/cover", methods=["POST"])
+def cover(album_id):
+    try:
+        generation.generate_album_cover(album_id)
+    except (ImageGenError, ValueError) as exc:
+        flash(f"Cover generation failed: {exc}", "error")
+        return redirect(url_for("albums.detail", album_id=album_id))
+    flash("Album cover generated.", "ok")
+    return redirect(url_for("albums.detail", album_id=album_id))
+
+
+@bp.route("/<int:album_id>/publish", methods=["POST"])
+def publish(album_id):
+    try:
+        result = publish_album(album_id)
+    except PublishError as exc:
+        flash(f"Publish failed: {exc}", "error")
+        return redirect(url_for("albums.detail", album_id=album_id))
+    msg = f"Published {result['count']} track(s) to {result['dir']}."
+    if result.get("warning"):
+        msg += f" ({result['warning']})"
+    flash(msg, "ok")
+    return redirect(url_for("albums.detail", album_id=album_id))
 
 
 @bp.route("/<int:album_id>/delete", methods=["POST"])

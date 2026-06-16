@@ -13,8 +13,15 @@ from database import (
 )
 from backends.llm import LLMClient
 from backends.acestep import ACEStepClient
+from backends.imagegen import ImageGenClient
 
-AUDIO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "audio")
+ROOT = os.path.dirname(os.path.abspath(__file__))
+AUDIO_DIR = os.path.join(ROOT, "static", "audio")
+COVER_DIR = os.path.join(ROOT, "static", "covers")
+
+# Audio extensions we recognise in the reference-music repository.
+REFERENCE_AUDIO_EXTS = (".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac",
+                        ".opus", ".wma", ".aiff", ".aif")
 
 
 # ---------------------------------------------------------------------------
@@ -350,6 +357,143 @@ def _owner_refinement(owner_type, owner_id):
         " WHERE m.band_id = ?", (owner_id,))
     vals = [m["refinement"] for m in members if m["refinement"] is not None]
     return sum(vals) / len(vals) if vals else 0.5
+
+
+def _owner_name_genre(owner_type, owner_id):
+    if owner_type == "band":
+        b = query("SELECT name, primary_genre FROM band WHERE id = ?", (owner_id,), one=True)
+        return (b["name"], b["primary_genre"]) if b else ("Unknown Artist", "")
+    a = query("SELECT name, primary_genre FROM artist WHERE id = ?", (owner_id,), one=True)
+    return (a["name"], a["primary_genre"]) if a else ("Unknown Artist", "")
+
+
+# ---------------------------------------------------------------------------
+# Reference music repository / cover songs
+# ---------------------------------------------------------------------------
+
+def list_reference_music():
+    """Enumerate audio files under the configured reference-music repository.
+
+    Returns a list of {"rel": <path relative to the repo>, "name": <filename>}.
+    Empty if no path is configured or the folder doesn't exist.
+    """
+    root = (all_settings().get("reference_music_path") or "").strip()
+    if not root or not os.path.isdir(root):
+        return []
+    out = []
+    for dirpath, _dirs, files in os.walk(root):
+        for f in files:
+            if f.lower().endswith(REFERENCE_AUDIO_EXTS):
+                full = os.path.join(dirpath, f)
+                out.append({"rel": os.path.relpath(full, root), "name": f})
+        if len(out) > 2000:  # keep the picker bounded on huge libraries
+            break
+    return sorted(out, key=lambda r: r["rel"].lower())
+
+
+def reference_music_abspath(rel):
+    """Resolve a reference-library-relative path to an absolute path, guarding
+    against escaping the configured repository."""
+    root = (all_settings().get("reference_music_path") or "").strip()
+    if not root or not rel:
+        return None
+    full = os.path.normpath(os.path.join(root, rel))
+    if os.path.commonpath([os.path.abspath(root), os.path.abspath(full)]) != os.path.abspath(root):
+        return None
+    return full if os.path.exists(full) else None
+
+
+def create_cover_track(reference_rel, owner_type=None, owner_id=None, notes=""):
+    """Write a cover/reinterpretation of a reference track in a performer's style.
+
+    The reference is grounded by its title (filename); the performer's persona
+    and genre steer the reimagining. The reference path is stored for provenance
+    and shown on the track page.
+    """
+    llm = LLMClient()
+    ref_title = os.path.splitext(os.path.basename(reference_rel))[0]
+    ctx = ""
+    refinement = 0.5
+    if owner_type and owner_id:
+        ctx, _ = _owner_context(owner_type, owner_id)
+        refinement = _owner_refinement(owner_type, owner_id)
+    system = ("You reinterpret an existing song as a cover, recast in a new "
+              "performer's voice and style.")
+    ctx_block = f"Performer context:\n{ctx}\n" if ctx else ""
+    user = f"""{ctx_block}Original song to cover: "{ref_title}"
+{('Direction from the user: ' + notes) if notes else ''}
+
+Reimagine this as a cover. Return JSON with keys:
+  title (keep or lightly adapt the original title),
+  subject, summary (how this cover reinterprets the original),
+  lyrics (with [verse]/[chorus] tags; write fresh lyrics fitting the title/theme),
+  style_tags (array), tempo (bpm int), key, mood,
+  environmentals (array), duration_seconds (int).
+"""
+    data = llm.generate_json(user, system=system)
+    final_tags = data.get("style_tags", []) + _refinement_tags(refinement)
+    tid = execute(
+        "INSERT INTO track (position, role, title, subject, summary, lyrics, style_tags,"
+        " tempo, song_key, mood, environmentals, duration, reference_audio,"
+        " status, source, created_at)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (1, "cover", data.get("title", ref_title), data.get("subject", ""),
+         data.get("summary", ""), data.get("lyrics", ""), jdump(final_tags),
+         data.get("tempo"), data.get("key", ""), data.get("mood", ""),
+         jdump(data.get("environmentals", [])), data.get("duration_seconds", 180),
+         reference_rel, "briefed", "cover", now_iso()),
+    )
+    return tid
+
+
+# ---------------------------------------------------------------------------
+# Cover art (sd.cpp)
+# ---------------------------------------------------------------------------
+
+def _art_prompt(subject, descriptor, genre, tags, concept=""):
+    bits = [subject, descriptor]
+    if genre:
+        bits.append(f"{genre} aesthetic")
+    if concept:
+        bits.append(concept)
+    if tags:
+        bits.append("style: " + ", ".join(tags[:6]))
+    bits.append("highly detailed, professional artwork, dramatic lighting, no text, no watermark")
+    return ", ".join(b for b in bits if b)
+
+
+def generate_album_cover(album_id):
+    """Render an album-cover image via sd.cpp (or a placeholder in mock mode).
+    Stores the relative path on the release and returns it."""
+    album = query("SELECT * FROM release WHERE id = ?", (album_id,), one=True)
+    if not album:
+        raise ValueError("album not found")
+    owner_name, genre = _owner_name_genre(album["owner_type"], album["owner_id"])
+    tags = jload(album["style_tags"], [])
+    prompt = _art_prompt(
+        f'album cover art for "{album["title"]}" by {owner_name}',
+        f'a {album["type"]} release', genre, tags, album["concept"] or "")
+    os.makedirs(COVER_DIR, exist_ok=True)
+    out = os.path.join(COVER_DIR, f"album{album_id}.png")
+    ImageGenClient().generate(prompt, out, seed=album_id * 7 + 13)
+    rel = os.path.relpath(out, ROOT)
+    execute("UPDATE release SET cover_path=? WHERE id=?", (rel, album_id))
+    return rel
+
+
+def generate_track_cover(track_id):
+    """Render single/standalone cover art for a track. Returns the relative path."""
+    t = query("SELECT * FROM track WHERE id = ?", (track_id,), one=True)
+    if not t:
+        raise ValueError("track not found")
+    tags = jload(t["style_tags"], [])
+    prompt = _art_prompt(
+        f'single cover art for "{t["title"]}"',
+        f'a {t["mood"] or "moody"} song', "", tags, t["subject"] or "")
+    os.makedirs(COVER_DIR, exist_ok=True)
+    out = os.path.join(COVER_DIR, f"track{track_id}.png")
+    ImageGenClient().generate(prompt, out, seed=track_id * 5 + 3)
+    return os.path.relpath(out, ROOT)
 
 
 # ---------------------------------------------------------------------------

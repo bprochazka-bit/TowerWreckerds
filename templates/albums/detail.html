@@ -7,10 +7,16 @@
     <h1>{{ album.title or 'Untitled' }}</h1>
     <p class="sub">{{ album.concept }}</p>
   </div>
-  <form method="post" action="{{ url_for('albums.delete', album_id=album.id) }}"
-        onsubmit="return confirm('Delete this release and its tracks?')">
-    <button class="btn danger sm" type="submit">Delete</button>
-  </form>
+  <div class="btn-row">
+    <form class="gen-form" data-working="Publishing album" method="post"
+          action="{{ url_for('albums.publish', album_id=album.id) }}">
+      <button class="btn sm" type="submit">Publish album</button>
+    </form>
+    <form method="post" action="{{ url_for('albums.delete', album_id=album.id) }}"
+          onsubmit="return confirm('Delete this release and its tracks?')">
+      <button class="btn danger sm" type="submit">Delete</button>
+    </form>
+  </div>
 </div>
 
 <div class="grid cols-2">
@@ -25,6 +31,21 @@
       {% for t in style_tags %}<span class="chip teal">{{ t }}</span>{% endfor %}
     </div>{% endif %}
   </div>
+</div>
+
+<div class="panel" style="margin-top:16px">
+  <div class="strip-label">Cover art</div>
+  {% if album.cover_path %}
+    <img src="{{ album.cover_path|image_url }}" alt="album cover"
+         style="max-width:320px;width:100%;border-radius:8px;display:block">
+  {% else %}
+    <p class="muted">No cover generated yet.</p>
+  {% endif %}
+  <form class="gen-form" data-working="Generating cover via sd.cpp" method="post"
+        action="{{ url_for('albums.cover', album_id=album.id) }}" style="margin-top:12px">
+    <button class="btn{{ '' if album.cover_path else ' primary' }}" type="submit">
+      {{ 'Regenerate cover' if album.cover_path else 'Generate cover' }}</button>
+  </form>
 </div>
 
 <div class="panel" style="margin-top:16px">

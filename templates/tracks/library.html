@@ -7,7 +7,10 @@
     <h1>Tracks</h1>
     <p class="sub">Everything briefed or rendered — album cuts and free-standing songs.</p>
   </div>
-  <a class="btn primary" href="{{ url_for('tracks.new_track') }}">+ Cut a track</a>
+  <div class="btn-row">
+    <a class="btn ghost" href="{{ url_for('tracks.new_cover') }}">Cover a song</a>
+    <a class="btn primary" href="{{ url_for('tracks.new_track') }}">+ Cut a track</a>
+  </div>
 </div>
 
 {% if tracks %}

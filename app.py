@@ -51,6 +51,14 @@ def create_app():
 
     app.jinja_env.filters["audio_url"] = _audio_url
 
+    # Cover images live in static/covers/. Normalise a stored path to a URL.
+    def _image_url(path):
+        if not path:
+            return None
+        return "/static/covers/" + os.path.basename(path)
+
+    app.jinja_env.filters["image_url"] = _image_url
+
     @app.route("/")
     def index():
         stats = {

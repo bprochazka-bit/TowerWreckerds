@@ -4,9 +4,12 @@ from flask import (
     Blueprint, flash, redirect, render_template, request, url_for,
 )
 
+import os
+
 from database import all_settings, execute, jdump, query, set_setting
 from backends.llm import LLMClient
 from backends.acestep import ACEStepClient
+from backends.imagegen import ImageGenClient
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -15,6 +18,9 @@ SETTING_KEYS = [
     "llm_temperature", "llm_max_tokens",
     "acestep_base_url", "acestep_candidates", "acestep_duration_ceiling",
     "acestep_format", "acestep_trim_noise", "mock_mode",
+    "reference_music_path",
+    "sdcpp_path", "sdcpp_model", "sdcpp_steps", "sdcpp_size", "sdcpp_cfg",
+    "publish_path",
 ]
 CHECKBOX_KEYS = {"mock_mode", "acestep_trim_noise"}
 
@@ -53,6 +59,32 @@ def test_acestep():
     cls = "ok" if ok else "error"
     label = "ACE-Step reachable" if ok else "ACE-Step unreachable"
     return f'<span class="status {cls}">{label}: {msg}</span>'
+
+
+@bp.route("/test/sdcpp", methods=["POST"])
+def test_sdcpp():
+    ok, msg = ImageGenClient().ping()
+    cls = "ok" if ok else "error"
+    label = "sd.cpp ready" if ok else "sd.cpp unavailable"
+    return f'<span class="status {cls}">{label}: {msg}</span>'
+
+
+@bp.route("/test/reference", methods=["POST"])
+def test_reference():
+    path = (request.form.get("reference_music_path", "") or "").strip()
+    if not path:
+        return '<span class="status error">No reference-music path set</span>'
+    if not os.path.isdir(path):
+        return f'<span class="status error">Not a folder: {path}</span>'
+    # Count audio files in the field's path directly (it may be unsaved).
+    import generation
+    exts = generation.REFERENCE_AUDIO_EXTS
+    count = 0
+    for _root, _dirs, files in os.walk(path):
+        count += sum(1 for f in files if f.lower().endswith(exts))
+        if count > 2000:
+            break
+    return f'<span class="status ok">Folder OK — {count} audio file(s) found</span>'
 
 
 @bp.route("/genres", methods=["POST"])
