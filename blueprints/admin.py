@@ -17,9 +17,11 @@ SETTING_KEYS = [
     "llm_backend", "llm_base_url", "llm_model", "llm_api_key",
     "llm_temperature", "llm_max_tokens",
     "acestep_base_url", "acestep_candidates", "acestep_duration_ceiling",
-    "acestep_format", "acestep_trim_noise", "mock_mode",
+    "acestep_format", "acestep_trim_noise",
+    "acestep_cover_strength", "acestep_cover_noise", "mock_mode",
     "reference_music_path",
-    "sdcpp_path", "sdcpp_model", "sdcpp_steps", "sdcpp_size", "sdcpp_cfg",
+    "sdcpp_url", "sdcpp_path", "sdcpp_model", "sdcpp_steps", "sdcpp_size",
+    "sdcpp_cfg", "sdcpp_negative",
     "publish_path",
 ]
 CHECKBOX_KEYS = {"mock_mode", "acestep_trim_noise"}

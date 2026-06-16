@@ -64,7 +64,8 @@ class ACEStepClient:
         except requests.RequestException as exc:
             return False, str(exc)
 
-    def generate(self, tags, lyrics, duration, seed, out_path, timeout=600):
+    def generate(self, tags, lyrics, duration, seed, out_path, timeout=600,
+                 reference_audio=None, cover_strength=None, cover_noise=None):
         """Render one audio file to out_path. Returns out_path.
 
         acestep.cpp's HTTP API is asynchronous (validated against ace-server.cpp):
@@ -74,6 +75,12 @@ class ACEStepClient:
                                           one audio part + one latent part)
         We render text2music directly (no /lm) so the artist's own lyrics are
         used verbatim rather than being rewritten by acestep's LM planner.
+
+        When `reference_audio` (a local file path) is given, this renders a
+        *cover* (audio2audio): task_type="cover", with the source audio sent as
+        the multipart `src_audio` part. `cover_strength` maps to
+        audio_cover_strength (fraction of DiT steps that see the source) and
+        `cover_noise` to cover_noise_strength.
         """
         duration = max(8, min(int(duration or 180), self.duration_ceiling))
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -90,16 +97,41 @@ class ACEStepClient:
             "output_format": self.synth_format,
             "task_type": "text2music",
         }
-        audio = self._synth(req, timeout)
+        src_audio = None
+        if reference_audio and os.path.exists(reference_audio):
+            req["task_type"] = "cover"
+            if cover_strength is not None:
+                try:
+                    req["audio_cover_strength"] = float(cover_strength)
+                except (TypeError, ValueError):
+                    pass
+            if cover_noise is not None:
+                try:
+                    req["cover_noise_strength"] = float(cover_noise)
+                except (TypeError, ValueError):
+                    pass
+            with open(reference_audio, "rb") as fh:
+                src_audio = (os.path.basename(reference_audio), fh.read())
+
+        audio = self._synth(req, timeout, src_audio=src_audio)
         with open(out_path, "wb") as fh:
             fh.write(audio)
         return out_path
 
-    def _synth(self, req, timeout):
+    def _synth(self, req, timeout, src_audio=None):
         """POST /synth and resolve the result to audio bytes, transparently
         handling both the async (job-id) build and any sync build that returns
-        audio inline."""
-        r = self._post("/synth", req, timeout)
+        audio inline. When `src_audio` (name, bytes) is supplied, the request is
+        sent as multipart with a `request` JSON part and a `src_audio` part
+        (acestep.cpp's cover/audio2audio contract)."""
+        if src_audio is not None:
+            files = {
+                "request": (None, json.dumps(req), "application/json"),
+                "src_audio": (src_audio[0], src_audio[1], "application/octet-stream"),
+            }
+            r = self._post_multipart("/synth", files, timeout)
+        else:
+            r = self._post("/synth", req, timeout)
         ctype = r.headers.get("Content-Type", "")
         if ctype.startswith("application/json"):
             try:
@@ -233,6 +265,18 @@ class ACEStepClient:
         error text on a 4xx/5xx so failures are diagnosable, not opaque."""
         try:
             r = requests.post(f"{self.base_url}{path}", json=body, timeout=timeout)
+        except requests.RequestException as exc:
+            raise ACEStepError(f"{path} connection failed: {exc}") from exc
+        if r.status_code >= 400:
+            detail = " ".join((r.text or "").split())[:400] or "(no body)"
+            raise ACEStepError(f"{path} {r.status_code}: {detail}")
+        return r
+
+    def _post_multipart(self, path, files, timeout):
+        """POST a multipart/form-data body (used for cover/audio2audio, where
+        the source audio rides alongside the JSON request)."""
+        try:
+            r = requests.post(f"{self.base_url}{path}", files=files, timeout=timeout)
         except requests.RequestException as exc:
             raise ACEStepError(f"{path} connection failed: {exc}") from exc
         if r.status_code >= 400:

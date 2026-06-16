@@ -523,13 +523,21 @@ def render_track(track_id):
     execute("UPDATE track SET status='producing' WHERE id=?", (track_id,))
     execute("DELETE FROM candidate WHERE track_id=?", (track_id,))
 
+    # If this track is a cover of a reference recording, resolve the source
+    # audio so the render runs as acestep.cpp audio2audio ("cover" task).
+    ref_abs = reference_music_abspath(t["reference_audio"]) if t["reference_audio"] else None
+    cover_strength = settings.get("acestep_cover_strength")
+    cover_noise = settings.get("acestep_cover_noise")
+
     base_seed = t["seed"] or (track_id * 1000)
     best = None
     for i in range(n):
         seed = base_seed + i
         out_path = os.path.join(AUDIO_DIR, f"track{track_id}_cand{i}.{ace.fmt}")
         try:
-            ace.generate(tags, lyrics, duration, seed, out_path)
+            ace.generate(tags, lyrics, duration, seed, out_path,
+                         reference_audio=ref_abs, cover_strength=cover_strength,
+                         cover_noise=cover_noise)
             score, note = integrity_score(out_path, duration)
         except Exception as exc:  # keep going; a bad candidate shouldn't kill the batch
             score, note = 0.0, f"render error: {exc}"

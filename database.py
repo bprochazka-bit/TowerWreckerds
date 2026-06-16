@@ -195,16 +195,23 @@ DEFAULT_SETTINGS = {
     "acestep_duration_ceiling": "240",
     "acestep_format": "wav16",
     "acestep_trim_noise": "1",
+    # Cover (audio2audio) controls for acestep.cpp's task_type="cover".
+    "acestep_cover_strength": "0.6",      # audio_cover_strength: 0..1 fraction of DiT steps
+    "acestep_cover_noise": "0.0",         # cover_noise_strength: blend noise with source latents
     "mock_mode": "1",                     # 1 = synthesize placeholders, no live backends
     # Reference-music repository: a folder of existing audio used as a reference
     # when generating cover versions of songs.
     "reference_music_path": "",
     # stable-diffusion.cpp (sd.cpp) image generation of bands/artists/album covers.
+    # Set sdcpp_url for a web-UI (AUTOMATIC1111-compatible) server, OR sdcpp_path
+    # for the local executable. A URL takes precedence when both are set.
+    "sdcpp_url": "",                      # e.g. http://localhost:7860 (A1111 /sdapi/v1)
     "sdcpp_path": "",                     # path to the sd / sd.cpp executable
-    "sdcpp_model": "",                    # path to the diffusion model weights
+    "sdcpp_model": "",                    # path to the diffusion model weights (CLI mode)
     "sdcpp_steps": "20",
     "sdcpp_size": "512",                  # square output, px
     "sdcpp_cfg": "7.0",
+    "sdcpp_negative": "text, watermark, signature, blurry, low quality, deformed",
     # Where published MP3s + covers are written. Blank => <app>/published.
     "publish_path": "",
 }

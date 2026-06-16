@@ -74,6 +74,18 @@
         <option value="mp3" {{ 'selected' if fmt == 'mp3' }}>mp3</option>
       </select>
 
+      <div class="field-row">
+        <div><label>Cover strength <span class="muted">(audio2audio)</span></label>
+          <input type="number" step="0.05" min="0" max="1" name="acestep_cover_strength"
+                 value="{{ settings.acestep_cover_strength }}"></div>
+        <div><label>Cover noise</label>
+          <input type="number" step="0.05" min="0" max="1" name="acestep_cover_noise"
+                 value="{{ settings.acestep_cover_noise }}"></div>
+      </div>
+      <p class="muted" style="font-size:12px;margin-top:6px">Used only when rendering
+        a cover: how much of the reference recording the model follows (0 = ignore,
+        1 = follow closely).</p>
+
       <label class="check" style="margin-top:16px">
         <input type="checkbox" name="acestep_trim_noise" {{ 'checked' if settings.acestep_trim_noise == '1' }}>
         <span>Trim trailing white noise / silence from rendered tracks (WAV only)</span>
@@ -120,10 +132,13 @@
 
     <div class="panel">
       <div class="strip-label">sd.cpp (cover art)</div>
-      <label>sd.cpp executable path</label>
+      <label>Web UI URL <span class="muted">(AUTOMATIC1111-compatible; takes precedence)</span></label>
+      <input type="text" name="sdcpp_url" value="{{ settings.sdcpp_url }}"
+             placeholder="http://localhost:7860">
+      <label>sd.cpp executable path <span class="muted">(used only if no URL)</span></label>
       <input type="text" name="sdcpp_path" value="{{ settings.sdcpp_path }}"
              placeholder="/path/to/sd">
-      <label>Model weights path</label>
+      <label>Model weights path <span class="muted">(executable mode)</span></label>
       <input type="text" name="sdcpp_model" value="{{ settings.sdcpp_model }}"
              placeholder="/path/to/model.safetensors or .gguf">
       <div class="field-row">
@@ -137,9 +152,12 @@
           <input type="number" step="0.5" min="1" max="20" name="sdcpp_cfg"
                  value="{{ settings.sdcpp_cfg }}"></div>
       </div>
-      <p class="muted" style="font-size:12px;margin-top:6px">Generates artist/band
-        and album-cover images. With Mock mode on (or no path set) a placeholder
-        image is produced so publishing still works.</p>
+      <label>Negative prompt</label>
+      <input type="text" name="sdcpp_negative" value="{{ settings.sdcpp_negative }}"
+             placeholder="text, watermark, blurry, low quality">
+      <p class="muted" style="font-size:12px;margin-top:6px">Generates album-cover
+        images via the web UI (or the local executable). With Mock mode on, or
+        neither configured, a placeholder image is produced so publishing still works.</p>
       <div class="btn-row">
         <button class="btn ghost sm" type="button"
                 hx-post="{{ url_for('admin.test_sdcpp') }}"
