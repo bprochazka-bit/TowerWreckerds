@@ -7,8 +7,9 @@ from flask import (
 import os
 
 from database import (
-    all_settings, execute, import_genres, jdump, parse_genres_payload,
-    query, set_setting, upsert_genre,
+    all_settings, execute, import_genres, import_style_tags,
+    parse_genres_payload, parse_style_tags_payload, query, set_setting,
+    upsert_genre, upsert_style_tag,
 )
 from backends.llm import LLMClient
 from backends.acestep import ACEStepClient
@@ -167,19 +168,65 @@ def delete_genre(genre_id):
     return redirect(url_for("admin.admin_home") + "#taxonomy")
 
 
+def _style_tag_form_data():
+    return {
+        "name": request.form.get("name", ""),
+        "category": request.form.get("category", "mood"),
+        "acestep_phrases": request.form.get("acestep_phrases", ""),
+    }
+
+
 @bp.route("/style-tags", methods=["POST"])
 def add_style_tag():
-    name = request.form.get("name", "").strip()
-    if name:
-        try:
-            execute(
-                "INSERT INTO style_tag (name, category, acestep_phrases) VALUES (?,?,?)",
-                (name, request.form.get("category", "mood"),
-                 jdump([p.strip() for p in request.form.get("acestep_phrases", name).split(",") if p.strip()])),
-            )
-            flash(f"Style tag '{name}' added.", "ok")
-        except Exception:
-            flash("Style tag already exists.", "error")
+    data = _style_tag_form_data()
+    if not data["name"].strip():
+        flash("Style tag needs a name.", "error")
+        return redirect(url_for("admin.admin_home") + "#taxonomy")
+    outcome = upsert_style_tag(data)
+    flash(f"Style tag '{data['name'].strip()}' {outcome}.", "ok")
+    return redirect(url_for("admin.admin_home") + "#taxonomy")
+
+
+@bp.route("/style-tags/<int:tag_id>/edit")
+def edit_style_tag(tag_id):
+    tag = query("SELECT * FROM style_tag WHERE id = ?", (tag_id,), one=True)
+    if not tag:
+        flash("Style tag not found.", "error")
+        return redirect(url_for("admin.admin_home") + "#taxonomy")
+    return render_template("admin/style_tag_edit.html", tag=tag)
+
+
+@bp.route("/style-tags/<int:tag_id>/edit", methods=["POST"])
+def update_style_tag(tag_id):
+    data = _style_tag_form_data()
+    if not data["name"].strip():
+        flash("Style tag needs a name.", "error")
+        return redirect(url_for("admin.edit_style_tag", tag_id=tag_id))
+    upsert_style_tag(data, tag_id=tag_id)
+    flash(f"Style tag '{data['name'].strip()}' updated.", "ok")
+    return redirect(url_for("admin.admin_home") + "#taxonomy")
+
+
+@bp.route("/style-tags/import", methods=["POST"])
+def import_style_tags_route():
+    text = request.form.get("style_tags_json", "").strip()
+    upload = request.files.get("style_tags_file")
+    if upload and upload.filename:
+        text = upload.read().decode("utf-8", "replace")
+    if not text:
+        flash("Paste JSON or choose a file to import.", "error")
+        return redirect(url_for("admin.admin_home") + "#taxonomy")
+    try:
+        items = parse_style_tags_payload(text)
+    except ValueError as exc:
+        flash(f"Import failed: {exc}", "error")
+        return redirect(url_for("admin.admin_home") + "#taxonomy")
+    res = import_style_tags(items)
+    flash(f"Imported style tags: {res['added']} added, {res['updated']} updated, "
+          f"{res['skipped']} skipped.", "ok")
+    if res["errors"]:
+        flash("Some rows had issues: " + "; ".join(res["errors"][:5])
+              + ("…" if len(res["errors"]) > 5 else ""), "error")
     return redirect(url_for("admin.admin_home") + "#taxonomy")
 
 

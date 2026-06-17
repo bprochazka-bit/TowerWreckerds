@@ -228,40 +228,22 @@ generators draw from. Genres and tags seed the prompts and are translated into
 ACE-Step style phrases at render time. The database is preloaded with a starter
 set; add, edit, or remove entries to steer the world toward whatever sound you want.
 
-### Managing genres
-
-Genres carry seven fields — `name`, `description`, `descriptors`,
-`typical_instruments`, `tempo_range`, `common_regions`, and `base_style_tags`.
-All of them are editable:
-
-- **Add / edit** — the Admin *Genres* panel adds a genre with every field, and
-  clicking a genre opens an edit page (rename included). List fields are
-  comma-separated in the UI.
-- **Bulk import (JSON)** — paste or upload a JSON array in Admin, or use the CLI.
-  Genres are matched by name, so re-importing updates them in place. List fields
-  accept either a JSON array or a comma/semicolon-separated string.
+Both taxonomies support **full-field add, per-entry editing, and bulk import**
+(paste/upload JSON in Admin, or via the CLI). Imports upsert by `name`, so
+re-applying a file updates existing entries in place.
 
 ```bash
-python3 manage.py import-genres genres.json    # file, or - for stdin
-python3 manage.py export-genres -o genres.json # dump current set (import template)
+python3 manage.py import-genres genres.json       # file, or - for stdin
+python3 manage.py export-genres -o genres.json     # dump current set (import template)
 python3 manage.py list-genres
+python3 manage.py import-style-tags tags.json
+python3 manage.py export-style-tags -o tags.json
+python3 manage.py list-style-tags
 ```
 
-Each genre object (all fields except `name` optional):
-
-```json
-[
-  {
-    "name": "Shoegaze",
-    "description": "Dense, guitar-washed dream rock.",
-    "descriptors": ["hazy", "reverb-drenched"],
-    "typical_instruments": ["distorted guitar", "bass", "drums"],
-    "tempo_range": "100-140 bpm",
-    "common_regions": ["UK"],
-    "base_style_tags": ["shoegaze", "wall of guitar", "ethereal vocals"]
-  }
-]
-```
+The full file layout — every field, the list-field string shorthand, and the
+`{"genres": [...]}` / `{"style_tags": [...]}` wrapper forms — is documented in
+**[docs/import-format.md](docs/import-format.md)**.
 
 ---
 

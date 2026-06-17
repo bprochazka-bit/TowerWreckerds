@@ -216,7 +216,7 @@
     <div class="members" style="max-height:320px;overflow:auto">
       {% for s in style_tags %}
       <div class="member">
-        <span style="flex:1">{{ s.name }}</span>
+        <a href="{{ url_for('admin.edit_style_tag', tag_id=s.id) }}" style="flex:1">{{ s.name }}</a>
         <span class="inst">{{ s.category }}</span>
         <form method="post" action="{{ url_for('admin.delete_style_tag', tag_id=s.id) }}">
           <button class="btn sm ghost" type="submit">✕</button>
@@ -237,6 +237,18 @@
       </select>
       <input type="text" name="acestep_phrases" placeholder="ACE-Step phrases, comma separated (optional)">
       <div class="btn-row"><button class="btn sm" type="submit">Add tag</button></div>
+    </form>
+
+    <form method="post" enctype="multipart/form-data"
+          action="{{ url_for('admin.import_style_tags_route') }}" style="margin-top:16px">
+      <label>Bulk import (JSON)</label>
+      <textarea name="style_tags_json" rows="4"
+        placeholder='[{"name":"shoegaze wash","category":"production","acestep_phrases":["wall of guitar","reverb-drenched"]}]'></textarea>
+      <input type="file" name="style_tags_file" accept=".json,application/json">
+      <p class="muted" style="font-size:12px;margin-top:6px">Paste a JSON array (or
+        upload a file). Existing tags are matched by name and updated. Same format as
+        <span class="mono">manage.py import-style-tags</span>.</p>
+      <div class="btn-row"><button class="btn sm" type="submit">Import style tags</button></div>
     </form>
   </div>
 </div>

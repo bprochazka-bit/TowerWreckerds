@@ -17,6 +17,11 @@ the app's own data layer (no Flask needed), so it runs anywhere the app does.
   # List genre names:
   python3 manage.py list-genres
 
+Style tags work the same way:
+  python3 manage.py import-style-tags tags.json
+  python3 manage.py export-style-tags -o tags.json
+  python3 manage.py list-style-tags
+
 Genre JSON object shape (all fields optional except name):
   {
     "name": "Shoegaze",
@@ -27,7 +32,16 @@ Genre JSON object shape (all fields optional except name):
     "common_regions": ["UK"],
     "base_style_tags": ["shoegaze", "wall of guitar", "ethereal vocals"]
   }
-List fields also accept a comma/semicolon-separated string.
+
+Style-tag JSON object shape (only name required):
+  {
+    "name": "shoegaze wash",
+    "category": "production",     # mood|instrumentation|era|production|crossover|vocal
+    "acestep_phrases": ["wall of guitar", "reverb-drenched"]
+  }
+
+List fields also accept a comma/semicolon-separated string. See
+docs/import-format.md for the full reference.
 """
 
 import argparse
@@ -78,6 +92,40 @@ def cmd_list_genres(args):
     return 0
 
 
+def cmd_import_style_tags(args):
+    database.init_db()
+    try:
+        items = database.parse_style_tags_payload(_load_text(args.file))
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    res = database.import_style_tags(items)
+    print(f"style tags: +{res['added']} added, {res['updated']} updated, "
+          f"{res['skipped']} skipped")
+    for warning in res["errors"]:
+        print(f"  warn: {warning}", file=sys.stderr)
+    return 0
+
+
+def cmd_export_style_tags(args):
+    database.init_db()
+    text = json.dumps(database.export_style_tags(), indent=2, ensure_ascii=False)
+    if args.output and args.output != "-":
+        with open(args.output, "w", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+        print(f"wrote {len(database.export_style_tags())} style tags to {args.output}")
+    else:
+        print(text)
+    return 0
+
+
+def cmd_list_style_tags(args):
+    database.init_db()
+    for r in database.query("SELECT name, category FROM style_tag ORDER BY category, name"):
+        print(f"{r['name']}\t{r['category']}")
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="manage.py",
                                      description="Music World management CLI")
@@ -94,6 +142,18 @@ def main(argv=None):
 
     p_list = sub.add_parser("list-genres", help="print genre names, one per line")
     p_list.set_defaults(func=cmd_list_genres)
+
+    p_simp = sub.add_parser("import-style-tags",
+                            help="bulk import/update style tags from a JSON file (or - for stdin)")
+    p_simp.add_argument("file", help="path to a JSON file, or - for stdin")
+    p_simp.set_defaults(func=cmd_import_style_tags)
+
+    p_sexp = sub.add_parser("export-style-tags", help="dump all style tags as JSON")
+    p_sexp.add_argument("-o", "--output", help="write to this file instead of stdout")
+    p_sexp.set_defaults(func=cmd_export_style_tags)
+
+    p_slist = sub.add_parser("list-style-tags", help="print style tags, tab-separated name/category")
+    p_slist.set_defaults(func=cmd_list_style_tags)
 
     args = parser.parse_args(argv)
     return args.func(args)

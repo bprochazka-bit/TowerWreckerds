@@ -320,11 +320,17 @@ def import_genres(items):
 def parse_genres_payload(text):
     """Parse a JSON genre payload (a list, or an object with a 'genres' key)
     into a list of dicts. Raises ValueError on malformed input."""
+    return _parse_payload(text, "genres")
+
+
+def _parse_payload(text, key):
+    """Parse a JSON payload that is either a list, or an object wrapping the
+    list under `key` (e.g. {"genres": [...]}). Raises ValueError otherwise."""
     data = json.loads(text)
     if isinstance(data, dict):
-        data = data.get("genres", data)
+        data = data.get(key, data)
     if not isinstance(data, list):
-        raise ValueError("expected a JSON array of genres, or {\"genres\": [...]}")
+        raise ValueError(f"expected a JSON array, or {{\"{key}\": [...]}}")
     return data
 
 
@@ -340,6 +346,74 @@ def export_genres():
             "tempo_range": r["tempo_range"] or "",
             "common_regions": jload(r["common_regions"], []),
             "base_style_tags": jload(r["base_style_tags"], []),
+        })
+    return out
+
+
+# --- style-tag helpers / bulk import ---------------------------------------
+
+STYLE_TAG_CATEGORIES = ("mood", "instrumentation", "era", "production",
+                        "crossover", "vocal")
+
+
+def upsert_style_tag(data, tag_id=None):
+    """Insert a style tag, or update it by id (if given) or by unique name.
+
+    `acestep_phrases` may be a JSON list or a delimited string; if omitted it
+    defaults to the tag name. Returns 'added', 'updated', or 'skipped'.
+    """
+    name = (data.get("name") or "").strip()
+    if not name:
+        return "skipped"
+    category = (data.get("category") or "mood").strip() or "mood"
+    phrases = coerce_str_list(data.get("acestep_phrases")) or [name]
+    row = None
+    if tag_id is not None:
+        row = query("SELECT id FROM style_tag WHERE id = ?", (tag_id,), one=True)
+    if row is None:
+        row = query("SELECT id FROM style_tag WHERE name = ?", (name,), one=True)
+    if row is not None:
+        execute("UPDATE style_tag SET name=?, category=?, acestep_phrases=? WHERE id=?",
+                (name, category, jdump(phrases), row["id"]))
+        return "updated"
+    execute("INSERT INTO style_tag (name, category, acestep_phrases) VALUES (?,?,?)",
+            (name, category, jdump(phrases)))
+    return "added"
+
+
+def import_style_tags(items):
+    """Bulk upsert style tags from an iterable of dicts. Existing tags (matched
+    by name) are updated. Returns {'added','updated','skipped','errors'}."""
+    result = {"added": 0, "updated": 0, "skipped": 0, "errors": []}
+    for i, item in enumerate(items):
+        if not isinstance(item, dict):
+            result["errors"].append(f"item {i}: expected an object, got {type(item).__name__}")
+            continue
+        if not (item.get("name") or "").strip():
+            result["skipped"] += 1
+            result["errors"].append(f"item {i}: missing 'name'")
+            continue
+        try:
+            result[upsert_style_tag(item)] += 1
+        except Exception as exc:
+            result["errors"].append(f"item {i} ({item.get('name', '?')}): {exc}")
+    return result
+
+
+def parse_style_tags_payload(text):
+    """Parse a JSON style-tag payload (a list, or an object with a 'style_tags'
+    key) into a list of dicts. Raises ValueError on malformed input."""
+    return _parse_payload(text, "style_tags")
+
+
+def export_style_tags():
+    """Return all style tags as a list of plain dicts (round-trips with import)."""
+    out = []
+    for r in query("SELECT * FROM style_tag ORDER BY category, name"):
+        out.append({
+            "name": r["name"],
+            "category": r["category"] or "mood",
+            "acestep_phrases": jload(r["acestep_phrases"], []),
         })
     return out
 

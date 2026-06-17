@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ tag.name }} · Music World{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <span class="eyebrow">SYS · style tag</span>
+  <h1>Edit style tag</h1>
+  <p class="sub">The ACE-Step phrases are what this tag expands to at render
+    time. Comma-separated.</p>
+</div></div>
+
+<div class="panel">
+  <form method="post" action="{{ url_for('admin.update_style_tag', tag_id=tag.id) }}">
+    <label>Name</label>
+    <input type="text" name="name" value="{{ tag.name }}" required>
+
+    <label>Category</label>
+    <select name="category">
+      {% for cat in ['mood','instrumentation','era','production','crossover','vocal'] %}
+      <option value="{{ cat }}" {{ 'selected' if tag.category == cat }}>{{ cat }}</option>
+      {% endfor %}
+    </select>
+
+    <label>ACE-Step phrases</label>
+    <input type="text" name="acestep_phrases"
+           value="{{ tag.acestep_phrases|jload|join(', ') }}">
+
+    <div class="btn-row">
+      <button class="btn primary" type="submit">Save style tag</button>
+      <a class="btn ghost" href="{{ url_for('admin.admin_home') }}#taxonomy">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
