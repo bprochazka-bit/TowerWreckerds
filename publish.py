@@ -253,9 +253,13 @@ def publish_track(track_id, *, album=None, dest_dir=None, cover_path=None,
             "cover": cover_path}
 
 
-def publish_album(album_id):
+def publish_album(album_id, progress=None, cancel=None):
     """Publish every rendered track of an album into a single folder, with one
-    shared cover written alongside as cover.png. Returns a summary dict."""
+    shared cover written alongside as cover.png. Returns a summary dict.
+
+    `progress(event, **data)` fires ("track_start"/"track_done") per track;
+    `cancel()` is polled between tracks to stop early.
+    """
     album = query("SELECT * FROM release WHERE id = ?", (album_id,), one=True)
     if not album:
         raise PublishError("album not found")
@@ -275,15 +279,37 @@ def publish_album(album_id):
     if cover_path and os.path.exists(cover_path):
         shutil.copyfile(cover_path, os.path.join(dest_dir, "cover.png"))
 
-    published, warnings = [], set()
-    for t in tracks:
-        res = publish_track(t["id"], album=album, dest_dir=dest_dir,
-                            cover_path=cover_path,
-                            owner_override=(artist_name, genre))
-        published.append(res["path"])
-        if res["warning"]:
-            warnings.add(res["warning"])
+    published, warnings, errors = [], set(), []
+    failed = cancelled = 0
+    for idx, t in enumerate(tracks):
+        if cancel and cancel():
+            cancelled = len(tracks) - idx
+            break
+        if progress:
+            try:
+                progress("track_start", track_id=t["id"])
+            except Exception:
+                pass
+        status = "published"
+        try:
+            res = publish_track(t["id"], album=album, dest_dir=dest_dir,
+                                cover_path=cover_path,
+                                owner_override=(artist_name, genre))
+            published.append(res["path"])
+            if res["warning"]:
+                warnings.add(res["warning"])
+        except Exception as exc:
+            failed += 1
+            errors.append(f"track {t['id']}: {exc}")
+            status = "failed"
+        if progress:
+            try:
+                progress("track_done", track_id=t["id"], status=status)
+            except Exception:
+                pass
 
-    execute("UPDATE release SET status='published' WHERE id=?", (album_id,))
+    if published and not cancelled:
+        execute("UPDATE release SET status='published' WHERE id=?", (album_id,))
     return {"ok": True, "count": len(published), "dir": dest_dir,
+            "failed": failed, "cancelled": cancelled, "errors": errors,
             "warning": "; ".join(sorted(warnings)) or None}

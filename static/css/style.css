@@ -204,7 +204,10 @@ input:focus, textarea:focus, select:focus {
 .pill.rendered::before, .pill.published::before { background: var(--green); box-shadow: 0 0 6px var(--green); }
 .pill.failed::before { background: var(--red); box-shadow: 0 0 6px var(--red); }
 .pill.tracklist::before { background: var(--teal); }
-.pill.draft::before { background: var(--muted-2); }
+.pill.draft::before, .pill.pending::before, .pill.skipped::before,
+.pill.cancelled::before { background: var(--muted-2); }
+.pill.rendering::before, .pill.briefing::before, .pill.publishing::before {
+  background: var(--amber); box-shadow: 0 0 6px var(--amber); animation: pulse 1s infinite; }
 @keyframes pulse { 50% { opacity: .35; } }
 
 .status.ok { color: var(--green); border-color: #3a4d33; }
@@ -330,9 +333,11 @@ audio { width: 100%; margin-top: 10px; filter: sepia(.2) saturate(.8); }
 /* Album render progress */
 .render-progress { margin: 0 0 16px; padding: 14px; border: 1px solid var(--line);
   border-radius: 8px; background: var(--bg-2); }
-.render-progress:empty, #render-progress:empty { display: none; }
+.render-progress:empty, #job-progress:empty { display: none; }
 .rp-head { display: flex; align-items: center; justify-content: space-between;
   gap: 12px; margin-bottom: 8px; }
+.rp-meta { display: inline-flex; align-items: center; gap: 10px; }
+.progress-bar.cancelled { background: var(--muted-2); box-shadow: none; }
 .progress { height: 8px; border-radius: 5px; background: var(--line-soft);
   overflow: hidden; }
 .progress-bar { height: 100%; background: var(--amber);

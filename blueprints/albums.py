@@ -75,8 +75,17 @@ def detail(album_id):
                            job=jobs.get_job(album_id))
 
 
+def _job_fragment(album_id, job):
+    album = query("SELECT * FROM release WHERE id = ?", (album_id,), one=True)
+    return render_template("albums/_job_progress.html", album=album, job=job)
+
+
 @bp.route("/<int:album_id>/brief-all", methods=["POST"])
 def brief_all(album_id):
+    # htmx clients get a background job + live progress; without JS we fall back
+    # to a synchronous run and a flash summary.
+    if request.headers.get("HX-Request"):
+        return _job_fragment(album_id, jobs.start("brief", album_id))
     try:
         res = generation.brief_album(album_id)
     except LLMError as exc:
@@ -91,12 +100,8 @@ def brief_all(album_id):
 
 @bp.route("/<int:album_id>/render-all", methods=["POST"])
 def render_all(album_id):
-    # htmx clients get a background job + live progress fragment; without JS we
-    # fall back to a synchronous render and a flash summary.
     if request.headers.get("HX-Request"):
-        job = jobs.start_album_render(album_id)
-        album = query("SELECT * FROM release WHERE id = ?", (album_id,), one=True)
-        return render_template("albums/_render_progress.html", album=album, job=job)
+        return _job_fragment(album_id, jobs.start("render", album_id))
     res = generation.render_album(album_id)
     flash(f"Rendered {res['rendered']} track(s); {res['skipped']} skipped, "
           f"{res['failed']} failed.", "ok" if not res["failed"] else "error")
@@ -106,13 +111,16 @@ def render_all(album_id):
     return redirect(url_for("albums.detail", album_id=album_id))
 
 
-@bp.route("/<int:album_id>/render-progress")
-def render_progress(album_id):
-    album = query("SELECT * FROM release WHERE id = ?", (album_id,), one=True)
-    if not album:
+@bp.route("/<int:album_id>/job-progress")
+def job_progress(album_id):
+    if not query("SELECT 1 FROM release WHERE id = ?", (album_id,), one=True):
         return ""
-    return render_template("albums/_render_progress.html", album=album,
-                           job=jobs.get_job(album_id))
+    return _job_fragment(album_id, jobs.get_job(album_id))
+
+
+@bp.route("/<int:album_id>/cancel-job", methods=["POST"])
+def cancel_job(album_id):
+    return _job_fragment(album_id, jobs.cancel_job(album_id))
 
 
 @bp.route("/<int:album_id>/cover", methods=["POST"])
@@ -128,6 +136,9 @@ def cover(album_id):
 
 @bp.route("/<int:album_id>/publish", methods=["POST"])
 def publish(album_id):
+    if request.headers.get("HX-Request"):
+        # The job surfaces "no rendered tracks" (etc.) as an error in the fragment.
+        return _job_fragment(album_id, jobs.start("publish", album_id))
     try:
         result = publish_album(album_id)
     except PublishError as exc:

@@ -1,17 +1,28 @@
 {% if not job %}
-<div id="render-progress"></div>
+<div id="job-progress"></div>
 {% else %}
 {% set pct = 100 if job.total_units == 0 else (job.done_units * 100 // job.total_units) %}
-<div id="render-progress" class="render-progress"
-     {% if job.status == 'running' %}hx-get="{{ url_for('albums.render_progress', album_id=album.id) }}"
+{% set running = job.status == 'running' %}
+{% set verb = {'render':'Rendering','brief':'Writing briefs','publish':'Publishing'}[job.kind] %}
+<div id="job-progress" class="render-progress"
+     {% if running %}hx-get="{{ url_for('albums.job_progress', album_id=album.id) }}"
      hx-trigger="every 1500ms" hx-swap="outerHTML"{% endif %}>
   <div class="rp-head">
     <span class="strip-label" style="margin:0">
-      {% if job.status == 'running' %}Rendering…
-      {% elif job.status == 'error' %}Render error
-      {% else %}Render complete{% endif %}
+      {% if running %}{{ verb }}…
+      {% elif job.status == 'cancelled' %}{{ verb }} cancelled
+      {% elif job.status == 'error' %}{{ verb }} — error
+      {% else %}{{ verb }} complete{% endif %}
     </span>
-    <span class="mono muted">{{ job.done_units }}/{{ job.total_units }} candidates · {{ pct }}%</span>
+    <span class="rp-meta">
+      <span class="mono muted">
+        {% if job.kind == 'render' %}{{ job.done_units }}/{{ job.total_units }} candidates{% else %}{{ job.done_units }}/{{ job.total_units }} tracks{% endif %} · {{ pct }}%</span>
+      {% if running %}
+      <button class="btn sm danger" type="button"
+              hx-post="{{ url_for('albums.cancel_job', album_id=album.id) }}"
+              hx-target="#job-progress" hx-swap="outerHTML">Cancel</button>
+      {% endif %}
+    </span>
   </div>
 
   <div class="progress"><div class="progress-bar {{ job.status }}" style="width:{{ pct }}%"></div></div>
@@ -21,7 +32,7 @@
     <div class="rp-trk">
       <span class="pos mono">{{ '%02d'|format(t.position) }}</span>
       <span class="rp-name">{{ t.title }}</span>
-      {% if t.will_render %}
+      {% if job.kind == 'render' and t.will %}
         <span class="rp-dots">
           {% for i in range(t.candidates_total) %}
           <span class="dot{{ ' on' if i < t.candidates_done }}{{ ' fail' if t.status == 'failed' }}"></span>
@@ -36,10 +47,9 @@
 
   {% if job.status == 'error' %}
     <p class="flash error" style="margin-top:10px">{{ job.message }}</p>
-  {% elif job.status == 'done' %}
+  {% elif job.status in ('done', 'cancelled') %}
     <div class="rp-foot">
-      <span class="muted mono">
-        rendered {{ job.summary.rendered }} · skipped {{ job.summary.skipped }} · failed {{ job.summary.failed }}</span>
+      <span class="muted mono">{{ job.summary_line }}</span>
       <a class="btn sm ghost" href="{{ url_for('albums.detail', album_id=album.id) }}">Refresh album →</a>
     </div>
   {% endif %}

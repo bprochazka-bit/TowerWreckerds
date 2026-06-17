@@ -315,42 +315,59 @@ Lyrics must fit the subject and the artist's voice.
     return track_id
 
 
-def brief_album(album_id):
+def brief_album(album_id, progress=None, cancel=None):
     """Write lyrics + full brief for every album track that doesn't have lyrics
     yet. Already-briefed tracks (with lyrics) are left untouched so manual edits
-    aren't clobbered. Returns {'briefed','skipped','errors'}."""
+    aren't clobbered. Returns {'briefed','skipped','failed','cancelled','errors'}.
+
+    `progress(event, **data)` fires ("track_start"/"track_done") per track;
+    `cancel()` is polled between tracks to stop early.
+    """
     tracks = query(
         "SELECT id, lyrics FROM track WHERE release_id = ? ORDER BY position",
         (album_id,))
-    res = {"briefed": 0, "skipped": 0, "errors": []}
-    for t in tracks:
-        if (t["lyrics"] or "").strip():
-            res["skipped"] += 1
-            continue
+    to_brief = [t for t in tracks if not (t["lyrics"] or "").strip()]
+    res = {"briefed": 0, "skipped": len(tracks) - len(to_brief),
+           "failed": 0, "cancelled": 0, "errors": []}
+    for idx, t in enumerate(to_brief):
+        if cancel and cancel():
+            res["cancelled"] = len(to_brief) - idx
+            break
+        if progress:
+            try:
+                progress("track_start", track_id=t["id"])
+            except Exception:
+                pass
         try:
             brief_track_from_album(t["id"])
             res["briefed"] += 1
+            status = "briefed"
         except Exception as exc:  # one bad track shouldn't abort the batch
+            res["failed"] += 1
             res["errors"].append(f"track {t['id']}: {exc}")
+            status = "failed"
+        if progress:
+            try:
+                progress("track_done", track_id=t["id"], status=status)
+            except Exception:
+                pass
     return res
 
 
-def render_album(album_id, progress=None):
+def render_album(album_id, progress=None, cancel=None):
     """Render every album track that has a brief (lyrics) but isn't rendered yet.
     Tracks already rendered are skipped; tracks without lyrics are skipped with a
-    note. Returns {'rendered','skipped','failed','errors'}.
+    note. Returns {'rendered','skipped','failed','cancelled','errors'}.
 
-    `progress`, if given, is called as `progress(event, **data)`:
-      - ("track_start", track_id=, index=, total=)
-      - ("candidate", track_id=, index=, total=, score=, note=)
-      - ("track_done", track_id=, status='rendered'|'failed', integrity=)
+    `progress(event, **data)` fires ("track_start"/"candidate"/"track_done");
+    `cancel()` is polled between tracks (and between candidates) to stop early.
     """
     tracks = query(
         "SELECT id, lyrics, audio_path FROM track WHERE release_id = ? ORDER BY position",
         (album_id,))
     to_render = [t for t in tracks
                  if not t["audio_path"] and (t["lyrics"] or "").strip()]
-    res = {"rendered": 0, "skipped": 0, "failed": 0, "errors": []}
+    res = {"rendered": 0, "skipped": 0, "failed": 0, "cancelled": 0, "errors": []}
     for t in tracks:
         if t["audio_path"] or not (t["lyrics"] or "").strip():
             res["skipped"] += 1
@@ -358,6 +375,9 @@ def render_album(album_id, progress=None):
                 res["errors"].append(f"track {t['id']}: no brief/lyrics yet")
 
     for idx, t in enumerate(to_render):
+        if cancel and cancel():
+            res["cancelled"] = len(to_render) - idx
+            break
         if progress:
             try:
                 progress("track_start", track_id=t["id"], index=idx, total=len(to_render))
@@ -369,10 +389,13 @@ def render_album(album_id, progress=None):
                 progress(event, track_id=t["id"], **data)
 
         try:
-            result = render_track(t["id"], progress=cand_cb)
+            result = render_track(t["id"], progress=cand_cb, cancel=cancel)
             if result.get("ok"):
                 res["rendered"] += 1
                 status, integrity = "rendered", result.get("integrity")
+            elif result.get("cancelled"):
+                res["cancelled"] += 1
+                status, integrity = "pending", None
             else:
                 res["failed"] += 1
                 res["errors"].append(f"track {t['id']}: {result.get('reason')}")
@@ -574,12 +597,13 @@ def generate_track_cover(track_id):
 # Render: N candidates -> integrity check -> select best
 # ---------------------------------------------------------------------------
 
-def render_track(track_id, progress=None):
+def render_track(track_id, progress=None, cancel=None):
     """Render N candidates and keep the best.
 
     `progress`, if given, is called as `progress(event, **data)`:
       - ("candidate", index=i, total=n, score=float, note=str) per candidate
-    so callers can show live per-candidate progress.
+    `cancel`, if given, is polled between candidates; when it returns True the
+    candidate loop stops early and the best take rendered so far (if any) is kept.
     """
     settings = all_settings()
     ace = ACEStepClient(settings)
@@ -612,6 +636,8 @@ def render_track(track_id, progress=None):
     base_seed = t["seed"] or (track_id * 1000)
     best = None
     for i in range(n):
+        if cancel and cancel():
+            break
         seed = base_seed + i
         out_path = os.path.join(AUDIO_DIR, f"track{track_id}_cand{i}.{ace.fmt}")
         try:
@@ -636,6 +662,11 @@ def render_track(track_id, progress=None):
                 pass  # progress reporting must never break a render
 
     if best is None:
+        if cancel and cancel():
+            # Cancelled before any candidate finished — leave the track briefed
+            # so it can be retried rather than marking it failed.
+            execute("UPDATE track SET status='briefed' WHERE id=?", (track_id,))
+            return {"ok": False, "cancelled": True, "reason": "cancelled"}
         execute("UPDATE track SET status='failed' WHERE id=?", (track_id,))
         return {"ok": False, "reason": "all candidates failed"}
 
