@@ -8,6 +8,12 @@ Imports are **upserts keyed by `name`**: a record whose name already exists is
 *updated in place*, otherwise it is *added*. This makes import files idempotent
 — keep a canonical file in version control and re-apply it any time.
 
+Name matching is **case-insensitive** (and ignores surrounding whitespace), so
+`indie rock` updates an existing `Indie Rock` rather than creating a
+near-duplicate. The imported record is authoritative: the stored name is set to
+the casing in your file. Matching is still exact on punctuation and spacing, so
+`Hip Hop`, `Hip-Hop`, and `HipHop` remain distinct entries.
+
 ---
 
 ## Top-level shape

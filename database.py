@@ -280,7 +280,9 @@ def upsert_genre(data, genre_id=None):
     if genre_id is not None:
         row = query("SELECT id FROM genre WHERE id = ?", (genre_id,), one=True)
     if row is None:
-        row = query("SELECT id FROM genre WHERE name = ?", (name,), one=True)
+        # Match case-insensitively so "indie rock" updates an existing
+        # "Indie Rock" rather than creating a near-duplicate.
+        row = query("SELECT id FROM genre WHERE name = ? COLLATE NOCASE", (name,), one=True)
     if row is not None:
         execute(
             "UPDATE genre SET name=?, description=?, descriptors=?, typical_instruments=?,"
@@ -371,7 +373,8 @@ def upsert_style_tag(data, tag_id=None):
     if tag_id is not None:
         row = query("SELECT id FROM style_tag WHERE id = ?", (tag_id,), one=True)
     if row is None:
-        row = query("SELECT id FROM style_tag WHERE name = ?", (name,), one=True)
+        # Match case-insensitively so near-duplicates aren't created.
+        row = query("SELECT id FROM style_tag WHERE name = ? COLLATE NOCASE", (name,), one=True)
     if row is not None:
         execute("UPDATE style_tag SET name=?, category=?, acestep_phrases=? WHERE id=?",
                 (name, category, jdump(phrases), row["id"]))

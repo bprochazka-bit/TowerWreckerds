@@ -229,8 +229,9 @@ ACE-Step style phrases at render time. The database is preloaded with a starter
 set; add, edit, or remove entries to steer the world toward whatever sound you want.
 
 Both taxonomies support **full-field add, per-entry editing, and bulk import**
-(paste/upload JSON in Admin, or via the CLI). Imports upsert by `name`, so
-re-applying a file updates existing entries in place.
+(paste/upload JSON in Admin, or via the CLI). Imports upsert by `name`
+(case-insensitive), so re-applying a file updates existing entries in place
+instead of creating near-duplicates.
 
 ```bash
 python3 manage.py import-genres genres.json       # file, or - for stdin
