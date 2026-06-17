@@ -315,6 +315,55 @@ Lyrics must fit the subject and the artist's voice.
     return track_id
 
 
+def brief_album(album_id):
+    """Write lyrics + full brief for every album track that doesn't have lyrics
+    yet. Already-briefed tracks (with lyrics) are left untouched so manual edits
+    aren't clobbered. Returns {'briefed','skipped','errors'}."""
+    tracks = query(
+        "SELECT id, lyrics FROM track WHERE release_id = ? ORDER BY position",
+        (album_id,))
+    res = {"briefed": 0, "skipped": 0, "errors": []}
+    for t in tracks:
+        if (t["lyrics"] or "").strip():
+            res["skipped"] += 1
+            continue
+        try:
+            brief_track_from_album(t["id"])
+            res["briefed"] += 1
+        except Exception as exc:  # one bad track shouldn't abort the batch
+            res["errors"].append(f"track {t['id']}: {exc}")
+    return res
+
+
+def render_album(album_id):
+    """Render every album track that has a brief (lyrics) but isn't rendered yet.
+    Tracks already rendered are skipped; tracks without lyrics are skipped with a
+    note. Returns {'rendered','skipped','failed','errors'}."""
+    tracks = query(
+        "SELECT id, lyrics, audio_path FROM track WHERE release_id = ? ORDER BY position",
+        (album_id,))
+    res = {"rendered": 0, "skipped": 0, "failed": 0, "errors": []}
+    for t in tracks:
+        if t["audio_path"]:
+            res["skipped"] += 1
+            continue
+        if not (t["lyrics"] or "").strip():
+            res["skipped"] += 1
+            res["errors"].append(f"track {t['id']}: no brief/lyrics yet")
+            continue
+        try:
+            result = render_track(t["id"])
+            if result.get("ok"):
+                res["rendered"] += 1
+            else:
+                res["failed"] += 1
+                res["errors"].append(f"track {t['id']}: {result.get('reason')}")
+        except Exception as exc:
+            res["failed"] += 1
+            res["errors"].append(f"track {t['id']}: {exc}")
+    return res
+
+
 def create_freeform_track(prompt, owner_type=None, owner_id=None):
     """Build a standalone track from a free-text prompt."""
     llm = LLMClient()

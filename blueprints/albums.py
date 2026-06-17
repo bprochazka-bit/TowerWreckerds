@@ -73,6 +73,31 @@ def detail(album_id):
                            owner_name=owner_name, style_tags=jload(album["style_tags"]))
 
 
+@bp.route("/<int:album_id>/brief-all", methods=["POST"])
+def brief_all(album_id):
+    try:
+        res = generation.brief_album(album_id)
+    except LLMError as exc:
+        flash(f"Brief failed: {exc}", "error")
+        return redirect(url_for("albums.detail", album_id=album_id))
+    flash(f"Briefed {res['briefed']} track(s); {res['skipped']} already had lyrics.", "ok")
+    if res["errors"]:
+        flash("Some tracks failed: " + "; ".join(res["errors"][:5])
+              + ("…" if len(res["errors"]) > 5 else ""), "error")
+    return redirect(url_for("albums.detail", album_id=album_id))
+
+
+@bp.route("/<int:album_id>/render-all", methods=["POST"])
+def render_all(album_id):
+    res = generation.render_album(album_id)
+    flash(f"Rendered {res['rendered']} track(s); {res['skipped']} skipped, "
+          f"{res['failed']} failed.", "ok" if not res["failed"] else "error")
+    if res["errors"]:
+        flash("Details: " + "; ".join(res["errors"][:5])
+              + ("…" if len(res["errors"]) > 5 else ""), "error")
+    return redirect(url_for("albums.detail", album_id=album_id))
+
+
 @bp.route("/<int:album_id>/cover", methods=["POST"])
 def cover(album_id):
     try:
