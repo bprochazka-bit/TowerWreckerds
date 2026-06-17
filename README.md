@@ -27,7 +27,10 @@ The app has four authoring sections plus an admin console.
 3. **Albums** — seed a release with a band or a solo artist, give it an ethos
    and style tags, and the model returns a titled concept plus a full
    tracklist. Every track comes with a role, subject, summary, tempo, mood,
-   length, and stylistic cues.
+   length, and stylistic cues. Album-wide buttons **write lyrics & brief for
+   all tracks** and **render audio for all tracks** — the latter runs in the
+   background with a live progress bar showing each track and candidate as it
+   completes.
 4. **Tracks** — open any album track to write its lyrics and production brief,
    or write a standalone song from a free-text prompt. Either way you then
    **render** it: the app asks ACE-Step for several candidate takes, scores each

@@ -56,11 +56,13 @@
           action="{{ url_for('albums.brief_all', album_id=album.id) }}">
       <button class="btn sm" type="submit">Write lyrics &amp; brief — all tracks</button>
     </form>
-    <form class="gen-form" data-working="Rendering all tracks through ACE-Step" method="post"
-          action="{{ url_for('albums.render_all', album_id=album.id) }}">
+    <form method="post" action="{{ url_for('albums.render_all', album_id=album.id) }}"
+          hx-post="{{ url_for('albums.render_all', album_id=album.id) }}"
+          hx-target="#render-progress" hx-swap="outerHTML">
       <button class="btn sm primary" type="submit">Render audio — all tracks</button>
     </form>
   </div>
+  {% include 'albums/_render_progress.html' %}
   <div class="tracklist">
     {% for t in tracks %}
     <div class="trk">

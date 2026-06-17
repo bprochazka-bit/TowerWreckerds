@@ -335,32 +335,57 @@ def brief_album(album_id):
     return res
 
 
-def render_album(album_id):
+def render_album(album_id, progress=None):
     """Render every album track that has a brief (lyrics) but isn't rendered yet.
     Tracks already rendered are skipped; tracks without lyrics are skipped with a
-    note. Returns {'rendered','skipped','failed','errors'}."""
+    note. Returns {'rendered','skipped','failed','errors'}.
+
+    `progress`, if given, is called as `progress(event, **data)`:
+      - ("track_start", track_id=, index=, total=)
+      - ("candidate", track_id=, index=, total=, score=, note=)
+      - ("track_done", track_id=, status='rendered'|'failed', integrity=)
+    """
     tracks = query(
         "SELECT id, lyrics, audio_path FROM track WHERE release_id = ? ORDER BY position",
         (album_id,))
+    to_render = [t for t in tracks
+                 if not t["audio_path"] and (t["lyrics"] or "").strip()]
     res = {"rendered": 0, "skipped": 0, "failed": 0, "errors": []}
     for t in tracks:
-        if t["audio_path"]:
+        if t["audio_path"] or not (t["lyrics"] or "").strip():
             res["skipped"] += 1
-            continue
-        if not (t["lyrics"] or "").strip():
-            res["skipped"] += 1
-            res["errors"].append(f"track {t['id']}: no brief/lyrics yet")
-            continue
+            if not (t["lyrics"] or "").strip() and not t["audio_path"]:
+                res["errors"].append(f"track {t['id']}: no brief/lyrics yet")
+
+    for idx, t in enumerate(to_render):
+        if progress:
+            try:
+                progress("track_start", track_id=t["id"], index=idx, total=len(to_render))
+            except Exception:
+                pass
+
+        def cand_cb(event, **data):
+            if progress:
+                progress(event, track_id=t["id"], **data)
+
         try:
-            result = render_track(t["id"])
+            result = render_track(t["id"], progress=cand_cb)
             if result.get("ok"):
                 res["rendered"] += 1
+                status, integrity = "rendered", result.get("integrity")
             else:
                 res["failed"] += 1
                 res["errors"].append(f"track {t['id']}: {result.get('reason')}")
+                status, integrity = "failed", None
         except Exception as exc:
             res["failed"] += 1
             res["errors"].append(f"track {t['id']}: {exc}")
+            status, integrity = "failed", None
+        if progress:
+            try:
+                progress("track_done", track_id=t["id"], status=status, integrity=integrity)
+            except Exception:
+                pass
     return res
 
 
@@ -549,7 +574,13 @@ def generate_track_cover(track_id):
 # Render: N candidates -> integrity check -> select best
 # ---------------------------------------------------------------------------
 
-def render_track(track_id):
+def render_track(track_id, progress=None):
+    """Render N candidates and keep the best.
+
+    `progress`, if given, is called as `progress(event, **data)`:
+      - ("candidate", index=i, total=n, score=float, note=str) per candidate
+    so callers can show live per-candidate progress.
+    """
     settings = all_settings()
     ace = ACEStepClient(settings)
     t = query("SELECT * FROM track WHERE id = ?", (track_id,), one=True)
@@ -598,6 +629,11 @@ def render_track(track_id):
         )
         if out_path and (best is None or score > best[1]):
             best = (cid, score, out_path, seed)
+        if progress:
+            try:
+                progress("candidate", index=i, total=n, score=score, note=note)
+            except Exception:
+                pass  # progress reporting must never break a render
 
     if best is None:
         execute("UPDATE track SET status='failed' WHERE id=?", (track_id,))

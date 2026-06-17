@@ -85,4 +85,6 @@ if __name__ == "__main__":
     import os
     host = os.environ.get("MUSIC_WORLD_HOST", "127.0.0.1")
     port = int(os.environ.get("MUSIC_WORLD_PORT", "5000"))
-    app.run(host=host, port=port, debug=True)
+    # threaded so progress-poll requests are served while a background album
+    # render runs in its daemon thread.
+    app.run(host=host, port=port, debug=True, threaded=True)

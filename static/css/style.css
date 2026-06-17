@@ -327,6 +327,34 @@ audio { width: 100%; margin-top: 10px; filter: sepia(.2) saturate(.8); }
 .check input { width: 16px; height: 16px; margin-top: 1px; accent-color: var(--amber); }
 .check span { flex: 1; }
 
+/* Album render progress */
+.render-progress { margin: 0 0 16px; padding: 14px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--bg-2); }
+.render-progress:empty, #render-progress:empty { display: none; }
+.rp-head { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 8px; }
+.progress { height: 8px; border-radius: 5px; background: var(--line-soft);
+  overflow: hidden; }
+.progress-bar { height: 100%; background: var(--amber);
+  box-shadow: 0 0 8px var(--amber); transition: width .4s ease; }
+.progress-bar.running { animation: pulse 1.6s ease-in-out infinite; }
+.progress-bar.done { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.progress-bar.error { background: var(--red); box-shadow: 0 0 8px var(--red); }
+.rp-tracks { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.rp-trk { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.rp-trk .pos { color: var(--muted-2); }
+.rp-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-dots { display: inline-flex; gap: 4px; }
+.rp-dots .dot { width: 9px; height: 9px; border-radius: 50%;
+  background: var(--line); border: 1px solid var(--line); }
+.rp-dots .dot.on { background: var(--amber); border-color: var(--amber);
+  box-shadow: 0 0 5px var(--amber); }
+.rp-dots .dot.on.fail { background: var(--red); border-color: var(--red);
+  box-shadow: 0 0 5px var(--red); }
+.rp-count { min-width: 34px; text-align: right; }
+.rp-foot { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-top: 12px; }
+
 @media (max-width: 820px) {
   .shell { flex-direction: column; }
   .rail { width: 100%; height: auto; position: static; flex: none; }
