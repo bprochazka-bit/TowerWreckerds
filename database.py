@@ -8,6 +8,7 @@ table that backs the admin configuration screen.
 
 import json
 import os
+import re
 import sqlite3
 from datetime import datetime, timezone
 
@@ -237,6 +238,110 @@ def all_settings():
     for row in query("SELECT key, value FROM settings"):
         merged[row["key"]] = row["value"]
     return merged
+
+
+# --- genre helpers / bulk import -------------------------------------------
+
+# The four list-valued genre columns; everything else is a scalar string.
+GENRE_LIST_FIELDS = ("descriptors", "typical_instruments",
+                     "common_regions", "base_style_tags")
+
+
+def coerce_str_list(value):
+    """Normalise a value into a clean list of strings. Accepts a JSON list, a
+    comma/semicolon-separated string, or None."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return [str(x).strip() for x in value if str(x).strip()]
+    if isinstance(value, str):
+        return [s.strip() for s in re.split(r"[;,]", value) if s.strip()]
+    return [str(value).strip()] if str(value).strip() else []
+
+
+def upsert_genre(data, genre_id=None):
+    """Insert a genre, or update it by id (if given) or by unique name.
+
+    `data` is a dict; list fields may be JSON lists or delimited strings.
+    Returns one of 'added', 'updated', 'skipped'.
+    """
+    name = (data.get("name") or "").strip()
+    if not name:
+        return "skipped"
+    cols = {
+        "description": (data.get("description") or "").strip(),
+        "descriptors": jdump(coerce_str_list(data.get("descriptors"))),
+        "typical_instruments": jdump(coerce_str_list(data.get("typical_instruments"))),
+        "tempo_range": (data.get("tempo_range") or "").strip(),
+        "common_regions": jdump(coerce_str_list(data.get("common_regions"))),
+        "base_style_tags": jdump(coerce_str_list(data.get("base_style_tags"))),
+    }
+    row = None
+    if genre_id is not None:
+        row = query("SELECT id FROM genre WHERE id = ?", (genre_id,), one=True)
+    if row is None:
+        row = query("SELECT id FROM genre WHERE name = ?", (name,), one=True)
+    if row is not None:
+        execute(
+            "UPDATE genre SET name=?, description=?, descriptors=?, typical_instruments=?,"
+            " tempo_range=?, common_regions=?, base_style_tags=? WHERE id=?",
+            (name, cols["description"], cols["descriptors"], cols["typical_instruments"],
+             cols["tempo_range"], cols["common_regions"], cols["base_style_tags"], row["id"]),
+        )
+        return "updated"
+    execute(
+        "INSERT INTO genre (name, description, descriptors, typical_instruments,"
+        " tempo_range, common_regions, base_style_tags) VALUES (?,?,?,?,?,?,?)",
+        (name, cols["description"], cols["descriptors"], cols["typical_instruments"],
+         cols["tempo_range"], cols["common_regions"], cols["base_style_tags"]),
+    )
+    return "added"
+
+
+def import_genres(items):
+    """Bulk upsert genres from an iterable of dicts. Existing genres (matched by
+    name) are updated. Returns {'added','updated','skipped','errors'}."""
+    result = {"added": 0, "updated": 0, "skipped": 0, "errors": []}
+    for i, item in enumerate(items):
+        if not isinstance(item, dict):
+            result["errors"].append(f"item {i}: expected an object, got {type(item).__name__}")
+            continue
+        if not (item.get("name") or "").strip():
+            result["skipped"] += 1
+            result["errors"].append(f"item {i}: missing 'name'")
+            continue
+        try:
+            result[upsert_genre(item)] += 1
+        except Exception as exc:  # one bad row shouldn't abort the batch
+            result["errors"].append(f"item {i} ({item.get('name', '?')}): {exc}")
+    return result
+
+
+def parse_genres_payload(text):
+    """Parse a JSON genre payload (a list, or an object with a 'genres' key)
+    into a list of dicts. Raises ValueError on malformed input."""
+    data = json.loads(text)
+    if isinstance(data, dict):
+        data = data.get("genres", data)
+    if not isinstance(data, list):
+        raise ValueError("expected a JSON array of genres, or {\"genres\": [...]}")
+    return data
+
+
+def export_genres():
+    """Return all genres as a list of plain dicts (round-trips with import)."""
+    out = []
+    for r in query("SELECT * FROM genre ORDER BY name"):
+        out.append({
+            "name": r["name"],
+            "description": r["description"] or "",
+            "descriptors": jload(r["descriptors"], []),
+            "typical_instruments": jload(r["typical_instruments"], []),
+            "tempo_range": r["tempo_range"] or "",
+            "common_regions": jload(r["common_regions"], []),
+            "base_style_tags": jload(r["base_style_tags"], []),
+        })
+    return out
 
 
 # --- seed data --------------------------------------------------------------

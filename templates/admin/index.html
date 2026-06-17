@@ -173,10 +173,10 @@
 <div id="taxonomy" class="grid cols-2" style="margin-top:24px">
   <div class="panel">
     <div class="strip-label">Genres · {{ genres|length }}</div>
-    <div class="members">
+    <div class="members" style="max-height:320px;overflow:auto">
       {% for g in genres %}
       <div class="member">
-        <span style="flex:1">{{ g.name }}</span>
+        <a href="{{ url_for('admin.edit_genre', genre_id=g.id) }}" style="flex:1">{{ g.name }}</a>
         <form method="post" action="{{ url_for('admin.delete_genre', genre_id=g.id) }}"
               onsubmit="return confirm('Remove genre {{ g.name }}?')">
           <button class="btn sm ghost" type="submit">✕</button>
@@ -188,8 +188,26 @@
       <label>Add genre</label>
       <input type="text" name="name" placeholder="name" required>
       <input type="text" name="description" placeholder="short description (optional)">
-      <input type="text" name="base_style_tags" placeholder="base style tags, comma separated (optional)">
+      <div class="field-row">
+        <input type="text" name="tempo_range" placeholder="tempo range, e.g. 110-150 bpm">
+        <input type="text" name="common_regions" placeholder="regions, comma separated">
+      </div>
+      <input type="text" name="descriptors" placeholder="descriptors, comma separated">
+      <input type="text" name="typical_instruments" placeholder="typical instruments, comma separated">
+      <input type="text" name="base_style_tags" placeholder="base style tags, comma separated">
       <div class="btn-row"><button class="btn sm" type="submit">Add genre</button></div>
+    </form>
+
+    <form method="post" enctype="multipart/form-data"
+          action="{{ url_for('admin.import_genres_route') }}" style="margin-top:16px">
+      <label>Bulk import (JSON)</label>
+      <textarea name="genres_json" rows="4"
+        placeholder='[{"name":"Shoegaze","descriptors":["hazy","reverb-drenched"],"typical_instruments":["distorted guitar","bass","drums"],"tempo_range":"100-140 bpm","common_regions":["UK"],"base_style_tags":["shoegaze","ethereal vocals"]}]'></textarea>
+      <input type="file" name="genres_file" accept=".json,application/json">
+      <p class="muted" style="font-size:12px;margin-top:6px">Paste a JSON array (or
+        upload a file). Existing genres are matched by name and updated. The
+        <span class="mono">manage.py import-genres</span> CLI accepts the same format.</p>
+      <div class="btn-row"><button class="btn sm" type="submit">Import genres</button></div>
     </form>
   </div>
 

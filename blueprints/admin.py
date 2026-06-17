@@ -6,7 +6,10 @@ from flask import (
 
 import os
 
-from database import all_settings, execute, jdump, query, set_setting
+from database import (
+    all_settings, execute, import_genres, jdump, parse_genres_payload,
+    query, set_setting, upsert_genre,
+)
 from backends.llm import LLMClient
 from backends.acestep import ACEStepClient
 from backends.imagegen import ImageGenClient
@@ -89,19 +92,71 @@ def test_reference():
     return f'<span class="status ok">Folder OK — {count} audio file(s) found</span>'
 
 
+def _genre_form_data():
+    """Pull the full set of genre fields out of a submitted form."""
+    return {
+        "name": request.form.get("name", ""),
+        "description": request.form.get("description", ""),
+        "descriptors": request.form.get("descriptors", ""),
+        "typical_instruments": request.form.get("typical_instruments", ""),
+        "tempo_range": request.form.get("tempo_range", ""),
+        "common_regions": request.form.get("common_regions", ""),
+        "base_style_tags": request.form.get("base_style_tags", ""),
+    }
+
+
 @bp.route("/genres", methods=["POST"])
 def add_genre():
-    name = request.form.get("name", "").strip()
-    if name:
-        try:
-            execute(
-                "INSERT INTO genre (name, description, base_style_tags) VALUES (?,?,?)",
-                (name, request.form.get("description", ""),
-                 jdump([t.strip() for t in request.form.get("base_style_tags", "").split(",") if t.strip()])),
-            )
-            flash(f"Genre '{name}' added.", "ok")
-        except Exception:
-            flash("Genre already exists.", "error")
+    data = _genre_form_data()
+    if not data["name"].strip():
+        flash("Genre needs a name.", "error")
+        return redirect(url_for("admin.admin_home") + "#taxonomy")
+    outcome = upsert_genre(data)
+    flash(f"Genre '{data['name'].strip()}' {outcome}.", "ok")
+    return redirect(url_for("admin.admin_home") + "#taxonomy")
+
+
+@bp.route("/genres/<int:genre_id>/edit")
+def edit_genre(genre_id):
+    genre = query("SELECT * FROM genre WHERE id = ?", (genre_id,), one=True)
+    if not genre:
+        flash("Genre not found.", "error")
+        return redirect(url_for("admin.admin_home") + "#taxonomy")
+    return render_template("admin/genre_edit.html", genre=genre)
+
+
+@bp.route("/genres/<int:genre_id>/edit", methods=["POST"])
+def update_genre(genre_id):
+    data = _genre_form_data()
+    if not data["name"].strip():
+        flash("Genre needs a name.", "error")
+        return redirect(url_for("admin.edit_genre", genre_id=genre_id))
+    upsert_genre(data, genre_id=genre_id)
+    flash(f"Genre '{data['name'].strip()}' updated.", "ok")
+    return redirect(url_for("admin.admin_home") + "#taxonomy")
+
+
+@bp.route("/genres/import", methods=["POST"])
+def import_genres_route():
+    text = request.form.get("genres_json", "").strip()
+    upload = request.files.get("genres_file")
+    if upload and upload.filename:
+        text = upload.read().decode("utf-8", "replace")
+    if not text:
+        flash("Paste JSON or choose a file to import.", "error")
+        return redirect(url_for("admin.admin_home") + "#taxonomy")
+    try:
+        items = parse_genres_payload(text)
+    except ValueError as exc:
+        flash(f"Import failed: {exc}", "error")
+        return redirect(url_for("admin.admin_home") + "#taxonomy")
+    res = import_genres(items)
+    msg = (f"Imported genres: {res['added']} added, {res['updated']} updated, "
+           f"{res['skipped']} skipped.")
+    flash(msg, "ok")
+    if res["errors"]:
+        flash("Some rows had issues: " + "; ".join(res["errors"][:5])
+              + ("…" if len(res["errors"]) > 5 else ""), "error")
     return redirect(url_for("admin.admin_home") + "#taxonomy")
 
 

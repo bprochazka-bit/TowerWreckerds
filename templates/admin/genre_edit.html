@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ genre.name }} · Music World{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <span class="eyebrow">SYS · genre</span>
+  <h1>Edit genre</h1>
+  <p class="sub">All fields the generators draw from. List fields are
+    comma-separated.</p>
+</div></div>
+
+<div class="panel">
+  <form method="post" action="{{ url_for('admin.update_genre', genre_id=genre.id) }}">
+    <label>Name</label>
+    <input type="text" name="name" value="{{ genre.name }}" required>
+
+    <label>Description</label>
+    <input type="text" name="description" value="{{ genre.description or '' }}">
+
+    <div class="field-row">
+      <div><label>Tempo range</label>
+        <input type="text" name="tempo_range" value="{{ genre.tempo_range or '' }}"
+               placeholder="e.g. 110-150 bpm"></div>
+      <div><label>Common regions</label>
+        <input type="text" name="common_regions"
+               value="{{ genre.common_regions|jload|join(', ') }}"></div>
+    </div>
+
+    <label>Descriptors</label>
+    <input type="text" name="descriptors"
+           value="{{ genre.descriptors|jload|join(', ') }}">
+
+    <label>Typical instruments</label>
+    <input type="text" name="typical_instruments"
+           value="{{ genre.typical_instruments|jload|join(', ') }}">
+
+    <label>Base style tags</label>
+    <input type="text" name="base_style_tags"
+           value="{{ genre.base_style_tags|jload|join(', ') }}">
+
+    <div class="btn-row">
+      <button class="btn primary" type="submit">Save genre</button>
+      <a class="btn ghost" href="{{ url_for('admin.admin_home') }}#taxonomy">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

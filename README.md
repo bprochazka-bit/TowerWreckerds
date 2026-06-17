@@ -226,7 +226,42 @@ cover is generated automatically at publish time.
 The Admin console also manages the **genre** and **style-tag** taxonomy the
 generators draw from. Genres and tags seed the prompts and are translated into
 ACE-Step style phrases at render time. The database is preloaded with a starter
-set; add or remove entries to steer the world toward whatever sound you want.
+set; add, edit, or remove entries to steer the world toward whatever sound you want.
+
+### Managing genres
+
+Genres carry seven fields — `name`, `description`, `descriptors`,
+`typical_instruments`, `tempo_range`, `common_regions`, and `base_style_tags`.
+All of them are editable:
+
+- **Add / edit** — the Admin *Genres* panel adds a genre with every field, and
+  clicking a genre opens an edit page (rename included). List fields are
+  comma-separated in the UI.
+- **Bulk import (JSON)** — paste or upload a JSON array in Admin, or use the CLI.
+  Genres are matched by name, so re-importing updates them in place. List fields
+  accept either a JSON array or a comma/semicolon-separated string.
+
+```bash
+python3 manage.py import-genres genres.json    # file, or - for stdin
+python3 manage.py export-genres -o genres.json # dump current set (import template)
+python3 manage.py list-genres
+```
+
+Each genre object (all fields except `name` optional):
+
+```json
+[
+  {
+    "name": "Shoegaze",
+    "description": "Dense, guitar-washed dream rock.",
+    "descriptors": ["hazy", "reverb-drenched"],
+    "typical_instruments": ["distorted guitar", "bass", "drums"],
+    "tempo_range": "100-140 bpm",
+    "common_regions": ["UK"],
+    "base_style_tags": ["shoegaze", "wall of guitar", "ethereal vocals"]
+  }
+]
+```
 
 ---
 
@@ -238,6 +273,7 @@ music-world/
 ├── database.py            # SQLite schema, seed data, settings store
 ├── generation.py          # orchestration: artists, bands, albums, tracks, render, covers, art
 ├── publish.py             # export tracks/albums as ID3-tagged MP3s + embedded cover art
+├── manage.py              # CLI: bulk import/export/list genres
 ├── acestep_adapter.py     # reference HTTP bridge to ACE-Step (runs in ACE-Step's env)
 ├── backends/
 │   ├── llm.py             # llama.cpp / ollama / openai client + JSON extraction
