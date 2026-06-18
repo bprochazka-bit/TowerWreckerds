@@ -22,6 +22,30 @@
   <p>{{ band.backstory or 'No backstory.' }}</p>
 </div>
 
+<div class="panel" style="margin-top:16px">
+  <div class="strip-label">Band photo</div>
+  {% if band.portrait_path %}
+    <img src="{{ band.portrait_path|image_url }}" alt="band photo"
+         style="max-width:360px;width:100%;border-radius:8px;display:block">
+  {% else %}
+    <p class="muted">No band photo yet.</p>
+  {% endif %}
+  <form class="gen-form" data-working="Generating band photo via sd.cpp" method="post"
+        action="{{ url_for('bands.portrait', band_id=band.id) }}" style="margin-top:12px">
+    <label>Prompt</label>
+    <textarea name="prompt" rows="3">{{ portrait_prompt }}</textarea>
+    <p class="muted" style="font-size:12px;margin-top:6px">
+      {% if has_member_photos %}Members' portraits are collaged into a reference
+      image (img2img), so the band photo is built from their faces.
+      {% else %}Tip: generate portraits for the members first, and the band photo
+      will be built from their faces.{% endif %}</p>
+    <div class="btn-row">
+      <button class="btn{{ '' if band.portrait_path else ' primary' }}" type="submit">
+        {{ 'Regenerate band photo' if band.portrait_path else 'Generate band photo' }}</button>
+    </div>
+  </form>
+</div>
+
 <div class="grid cols-2" style="margin-top:16px">
   <div class="panel">
     <div class="strip-label">Sounds like / influences</div>

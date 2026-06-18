@@ -17,7 +17,26 @@
   </form>
 </div>
 
-<div class="grid cols-2">
+<div class="panel">
+  <div class="strip-label">Portrait</div>
+  {% if artist.portrait_path %}
+    <img src="{{ artist.portrait_path|image_url }}" alt="portrait"
+         style="max-width:280px;width:100%;border-radius:8px;display:block">
+  {% else %}
+    <p class="muted">No portrait yet.</p>
+  {% endif %}
+  <form class="gen-form" data-working="Generating portrait via sd.cpp" method="post"
+        action="{{ url_for('artists.portrait', artist_id=artist.id) }}" style="margin-top:12px">
+    <label>Prompt</label>
+    <textarea name="prompt" rows="3">{{ portrait_prompt }}</textarea>
+    <div class="btn-row">
+      <button class="btn{{ '' if artist.portrait_path else ' primary' }}" type="submit">
+        {{ 'Regenerate portrait' if artist.portrait_path else 'Generate portrait' }}</button>
+    </div>
+  </form>
+</div>
+
+<div class="grid cols-2" style="margin-top:16px">
   <div class="panel">
     <div class="strip-label">Persona</div>
     <p>{{ artist.persona or 'No persona.' }}</p>

@@ -704,20 +704,145 @@ def build_album_cover_prompt(album_id):
         f'a {album["type"]} release', genre, tags, album["concept"] or "")
 
 
-def generate_album_cover(album_id, prompt=None):
+def _abs_cover(rel):
+    if not rel:
+        return None
+    p = rel if os.path.isabs(rel) else os.path.join(ROOT, rel)
+    return p if os.path.exists(p) else None
+
+
+def _owner_portrait_path(owner_type, owner_id):
+    """Absolute path to a performer's portrait image, or None."""
+    table = "band" if owner_type == "band" else "artist"
+    r = query(f"SELECT portrait_path FROM {table} WHERE id = ?", (owner_id,), one=True)
+    return _abs_cover(r["portrait_path"]) if r and "portrait_path" in r.keys() else None
+
+
+def generate_album_cover(album_id, prompt=None, use_photo=False):
     """Render an album-cover image via sd.cpp (or a placeholder in mock mode).
     Uses `prompt` if given (the user's edited text), else the auto-built one.
-    Stores the cover path and the prompt used on the release; returns the path."""
+    When `use_photo` is set and the performer has a portrait, that image seeds the
+    cover via img2img. Stores the cover path and prompt on the release."""
     album = query("SELECT * FROM release WHERE id = ?", (album_id,), one=True)
     if not album:
         raise ValueError("album not found")
     prompt = (prompt or "").strip() or build_album_cover_prompt(album_id)
+    init = _owner_portrait_path(album["owner_type"], album["owner_id"]) if use_photo else None
     os.makedirs(COVER_DIR, exist_ok=True)
     out = os.path.join(COVER_DIR, f"album{album_id}.png")
-    ImageGenClient().generate(prompt, out, seed=album_id * 7 + 13)
+    ImageGenClient().generate(prompt, out, seed=album_id * 7 + 13,
+                              init_image=init, strength=0.55)
     rel = os.path.relpath(out, ROOT)
     execute("UPDATE release SET cover_path=?, cover_prompt=? WHERE id=?",
             (rel, prompt, album_id))
+    return rel
+
+
+# ---------------------------------------------------------------------------
+# Portraits (artists & bands)
+# ---------------------------------------------------------------------------
+
+def _portrait_prompt(subject, gender, genre, influences, extra=""):
+    bits = ["professional promotional portrait photograph", subject]
+    if gender:
+        bits.append({"female": "a woman", "male": "a man",
+                     "androgynous": "an androgynous person"}.get(gender, ""))
+    if genre:
+        bits.append(f"{genre} musician")
+    if extra:
+        bits.append(extra)
+    if influences:
+        bits.append(f"styled like {influences}")
+    bits.append("realistic, detailed, studio lighting, sharp focus, no text, no watermark")
+    return ", ".join(b for b in bits if b)
+
+
+def build_artist_portrait_prompt(artist_id):
+    a = query("SELECT * FROM artist WHERE id = ?", (artist_id,), one=True)
+    if not a:
+        raise ValueError("artist not found")
+    extra = a["region"] and f"from {a['region']}" or ""
+    if a["persona"]:
+        extra = (extra + ", " if extra else "") + a["persona"][:160]
+    return _portrait_prompt(f'of {a["name"]}', a["vocal"] or "", a["primary_genre"] or "",
+                            (a["influences"] or "").strip(), extra)
+
+
+def build_band_portrait_prompt(band_id):
+    b = query("SELECT * FROM band WHERE id = ?", (band_id,), one=True)
+    if not b:
+        raise ValueError("band not found")
+    n = query("SELECT COUNT(*) c FROM membership WHERE band_id=? AND left_on IS NULL",
+              (band_id,), one=True)["c"]
+    subject = f'group portrait of the band {b["name"]}'
+    subject += f', {n} musicians' if n else ''
+    return _portrait_prompt(subject, "", b["primary_genre"] or "",
+                            (b["influences"] or "").strip())
+
+
+def generate_artist_portrait(artist_id, prompt=None):
+    """Render an artist portrait (txt2img). Stores path + prompt; returns path."""
+    if not query("SELECT 1 FROM artist WHERE id=?", (artist_id,), one=True):
+        raise ValueError("artist not found")
+    prompt = (prompt or "").strip() or build_artist_portrait_prompt(artist_id)
+    os.makedirs(COVER_DIR, exist_ok=True)
+    out = os.path.join(COVER_DIR, f"artist{artist_id}.png")
+    ImageGenClient().generate(prompt, out, seed=artist_id * 13 + 5)
+    rel = os.path.relpath(out, ROOT)
+    execute("UPDATE artist SET portrait_path=?, portrait_prompt=? WHERE id=?",
+            (rel, prompt, artist_id))
+    return rel
+
+
+def _build_member_collage(paths, out_path, cell=384):
+    """Tile member portraits into one image (img2img reference). Needs Pillow
+    (python3-pil); returns the path, or None if PIL is missing or no images."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    import math
+    imgs = []
+    for p in paths:
+        try:
+            imgs.append(Image.open(p).convert("RGB"))
+        except Exception:
+            pass
+    if not imgs:
+        return None
+    cols = math.ceil(math.sqrt(len(imgs)))
+    rows = math.ceil(len(imgs) / cols)
+    canvas = Image.new("RGB", (cols * cell, rows * cell), (18, 18, 18))
+    for i, im in enumerate(imgs):
+        r, c = divmod(i, cols)
+        canvas.paste(im.resize((cell, cell)), (c * cell, r * cell))
+    canvas.save(out_path)
+    return out_path
+
+
+def generate_band_portrait(band_id, prompt=None):
+    """Render a band photo. If members have portraits, they're collaged into one
+    img2img reference (Pillow) so the band shot is built from their photos."""
+    if not query("SELECT 1 FROM band WHERE id=?", (band_id,), one=True):
+        raise ValueError("band not found")
+    prompt = (prompt or "").strip() or build_band_portrait_prompt(band_id)
+    rows = query(
+        "SELECT a.portrait_path AS p FROM membership m JOIN artist a ON a.id = m.artist_id"
+        " WHERE m.band_id = ? AND m.left_on IS NULL", (band_id,))
+    portraits = [pp for pp in (_abs_cover(r["p"]) for r in rows) if pp]
+    os.makedirs(COVER_DIR, exist_ok=True)
+    init = None
+    if len(portraits) >= 2:
+        init = _build_member_collage(
+            portraits, os.path.join(COVER_DIR, f"band{band_id}_ref.png"))
+    if init is None and portraits:
+        init = portraits[0]
+    out = os.path.join(COVER_DIR, f"band{band_id}.png")
+    ImageGenClient().generate(prompt, out, seed=band_id * 11 + 7,
+                              init_image=init, strength=0.6)
+    rel = os.path.relpath(out, ROOT)
+    execute("UPDATE band SET portrait_path=?, portrait_prompt=? WHERE id=?",
+            (rel, prompt, band_id))
     return rel
 
 

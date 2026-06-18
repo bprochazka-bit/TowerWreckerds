@@ -6,6 +6,7 @@ from flask import (
 
 from database import execute, jdump, jload, now_iso, query
 from backends.llm import LLMError
+from backends.imagegen import ImageGenError
 import generation
 
 bp = Blueprint("artists", __name__, url_prefix="/artists")
@@ -67,8 +68,22 @@ def detail(artist_id):
     releases = query(
         "SELECT * FROM release WHERE owner_type='artist' AND owner_id=? ORDER BY id DESC",
         (artist_id,))
+    portrait_prompt = (artist["portrait_prompt"] if "portrait_prompt" in artist.keys() else None) \
+        or generation.build_artist_portrait_prompt(artist_id)
     return render_template("artists/detail.html", artist=artist, bands=bands,
-                           releases=releases, secondary=jload(artist["secondary_genres"]))
+                           releases=releases, secondary=jload(artist["secondary_genres"]),
+                           portrait_prompt=portrait_prompt)
+
+
+@bp.route("/<int:artist_id>/portrait", methods=["POST"])
+def portrait(artist_id):
+    try:
+        generation.generate_artist_portrait(artist_id, prompt=request.form.get("prompt"))
+    except (ImageGenError, ValueError) as exc:
+        flash(f"Portrait generation failed: {exc}", "error")
+        return redirect(url_for("artists.detail", artist_id=artist_id))
+    flash("Portrait generated.", "ok")
+    return redirect(url_for("artists.detail", artist_id=artist_id))
 
 
 @bp.route("/<int:artist_id>/rename", methods=["POST"])

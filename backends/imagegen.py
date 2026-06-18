@@ -83,18 +83,27 @@ class ImageGenClient:
         except (OSError, subprocess.SubprocessError) as exc:
             return False, str(exc)
 
-    def generate(self, prompt, out_path, seed=0, timeout=900):
-        """Render one image to out_path (PNG). Returns out_path."""
+    def generate(self, prompt, out_path, seed=0, timeout=900,
+                 init_image=None, strength=0.6):
+        """Render one image to out_path (PNG). Returns out_path.
+
+        If `init_image` (a path to a source PNG) is given, runs img2img with
+        `strength` as the denoising strength so the output is guided by it."""
         os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+        if init_image and not os.path.exists(init_image):
+            init_image = None
         mode = self.mode
         if mode == "http":
-            return self._http_generate(prompt, out_path, seed, timeout)
+            return self._http_generate(prompt, out_path, seed, timeout,
+                                       init_image, strength)
         if mode == "cli":
-            return self._cli_generate(prompt, out_path, seed, timeout)
+            return self._cli_generate(prompt, out_path, seed, timeout,
+                                      init_image, strength)
         _placeholder_png(out_path, seed=seed, size=min(self.size, 512))
         return out_path
 
-    def _http_generate(self, prompt, out_path, seed, timeout):
+    def _http_generate(self, prompt, out_path, seed, timeout,
+                       init_image=None, strength=0.6):
         body = {
             "prompt": prompt,
             "negative_prompt": self.negative,
@@ -105,8 +114,14 @@ class ImageGenClient:
             "seed": int(seed) if seed is not None else -1,
             "batch_size": 1,
         }
+        endpoint = "/sdapi/v1/txt2img"
+        if init_image:
+            with open(init_image, "rb") as fh:
+                body["init_images"] = [base64.b64encode(fh.read()).decode("ascii")]
+            body["denoising_strength"] = float(strength)
+            endpoint = "/sdapi/v1/img2img"
         try:
-            r = requests.post(f"{self.url}/sdapi/v1/txt2img", json=body, timeout=timeout)
+            r = requests.post(f"{self.url}{endpoint}", json=body, timeout=timeout)
             r.raise_for_status()
             data = r.json()
         except requests.RequestException as exc:
@@ -127,12 +142,15 @@ class ImageGenClient:
             fh.write(raw)
         return out_path
 
-    def _cli_generate(self, prompt, out_path, seed, timeout):
+    def _cli_generate(self, prompt, out_path, seed, timeout,
+                      init_image=None, strength=0.6):
         cmd = [
             self.exe, "-m", self.model, "-p", prompt, "-o", out_path,
             "--steps", str(self.steps), "-W", str(self.size),
             "-H", str(self.size), "--cfg-scale", str(self.cfg),
         ]
+        if init_image:
+            cmd += ["-M", "img2img", "-i", init_image, "--strength", str(strength)]
         if self.negative:
             cmd += ["-n", self.negative]
         if seed is not None:

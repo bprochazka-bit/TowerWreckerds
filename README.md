@@ -232,9 +232,24 @@ in either of two modes (set in **Admin → sd.cpp (cover art)**):
 
 Both modes share the steps, output size, CFG scale, and negative-prompt
 settings. Open any album and click **Generate cover**; the prompt is built from
-the album's title, owner, genre, concept, and style tags. With **Mock mode** on
-(or neither URL nor executable configured) a deterministic placeholder image is
-produced instead, so the rest of the flow still works with no backend.
+the album's title, owner, genre, concept, and style tags (and is editable before
+generating). With **Mock mode** on (or neither URL nor executable configured) a
+deterministic placeholder image is produced instead, so the rest of the flow
+still works with no backend.
+
+### Portraits and photo-sourced art
+
+Artist and band detail pages can **generate a portrait** (the prompt is built
+from persona/genre/region/vocal and is editable). Those photos can then seed
+other art via **img2img**:
+
+- A **band photo** is built from its members' portraits — if members have
+  portraits they're collaged into one reference image the band shot is generated
+  from (needs `python3-pil`; without it, it falls back to one member's photo or
+  text only).
+- An **album cover** can be based on the performer's photo: tick *Base on the
+  performer's photo* in the cover panel to seed the cover from their portrait or
+  band photo.
 
 ## Publishing
 

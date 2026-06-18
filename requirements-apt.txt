@@ -12,6 +12,10 @@
 python3           # interpreter (Debian 13 ships Python 3.13)
 python3-flask     # web framework
 python3-requests  # HTTP client for the LLM and ACE-Step backends
+python3-pil       # Pillow — collages member portraits into a band-photo reference
+#
+# python3-pil is optional: without it, band-photo generation falls back to a
+# single member's portrait (or text-only) instead of a multi-face collage.
 #
 # Optional, only if you want to serve behind a production WSGI server:
 # python3-gunicorn

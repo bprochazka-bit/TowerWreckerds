@@ -55,6 +55,8 @@ CREATE TABLE IF NOT EXISTS artist (
     momentum REAL DEFAULT 0.0,
     influences TEXT,             -- "sounds like" reference artists/bands
     vocal TEXT,                  -- lead vocal: '' | female | male | androgynous
+    portrait_path TEXT,          -- generated portrait image (relative path)
+    portrait_prompt TEXT,        -- last prompt used/edited for the portrait
     status TEXT DEFAULT 'active',
     created_at TEXT
 );
@@ -67,6 +69,8 @@ CREATE TABLE IF NOT EXISTS band (
     formed_on TEXT,
     influences TEXT,             -- "sounds like" reference artists/bands
     vocal TEXT,                  -- lead vocal override: '' (derive from members) | female | male | androgynous
+    portrait_path TEXT,          -- generated band photo (relative path)
+    portrait_prompt TEXT,        -- last prompt used/edited for the band photo
     status TEXT DEFAULT 'active',
     created_at TEXT
 );
@@ -499,6 +503,10 @@ MIGRATIONS = [
     ("band", "influences", "TEXT"),
     ("artist", "vocal", "TEXT"),
     ("band", "vocal", "TEXT"),
+    ("artist", "portrait_path", "TEXT"),
+    ("artist", "portrait_prompt", "TEXT"),
+    ("band", "portrait_path", "TEXT"),
+    ("band", "portrait_prompt", "TEXT"),
 ]
 
 

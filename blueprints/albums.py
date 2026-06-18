@@ -128,7 +128,9 @@ def cancel_job(album_id):
 @bp.route("/<int:album_id>/cover", methods=["POST"])
 def cover(album_id):
     try:
-        generation.generate_album_cover(album_id, prompt=request.form.get("prompt"))
+        generation.generate_album_cover(
+            album_id, prompt=request.form.get("prompt"),
+            use_photo=bool(request.form.get("use_photo")))
     except (ImageGenError, ValueError) as exc:
         flash(f"Cover generation failed: {exc}", "error")
         return redirect(url_for("albums.detail", album_id=album_id))
