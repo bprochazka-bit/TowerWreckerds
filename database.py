@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS release (
     style_tags TEXT,             -- json list
     release_date TEXT,
     cover_path TEXT,             -- generated album cover image (relative path)
+    cover_prompt TEXT,           -- last prompt used/edited for the cover image
     status TEXT DEFAULT 'draft', -- draft | tracklist | producing | published
     created_at TEXT
 );
@@ -491,6 +492,7 @@ MIGRATIONS = [
     ("track", "published_path", "TEXT"),
     ("track", "influences", "TEXT"),
     ("release", "cover_path", "TEXT"),
+    ("release", "cover_prompt", "TEXT"),
     ("artist", "influences", "TEXT"),
     ("band", "influences", "TEXT"),
 ]

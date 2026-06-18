@@ -70,9 +70,11 @@ def detail(album_id):
         return redirect(url_for("albums.list_albums"))
     tracks = query("SELECT * FROM track WHERE release_id=? ORDER BY position", (album_id,))
     owner_name = _owner_name(album["owner_type"], album["owner_id"])
+    cover_prompt = (album["cover_prompt"] if "cover_prompt" in album.keys() else None) \
+        or generation.build_album_cover_prompt(album_id)
     return render_template("albums/detail.html", album=album, tracks=tracks,
                            owner_name=owner_name, style_tags=jload(album["style_tags"]),
-                           job=jobs.get_job(album_id))
+                           cover_prompt=cover_prompt, job=jobs.get_job(album_id))
 
 
 def _job_fragment(album_id, job):
@@ -126,7 +128,7 @@ def cancel_job(album_id):
 @bp.route("/<int:album_id>/cover", methods=["POST"])
 def cover(album_id):
     try:
-        generation.generate_album_cover(album_id)
+        generation.generate_album_cover(album_id, prompt=request.form.get("prompt"))
     except (ImageGenError, ValueError) as exc:
         flash(f"Cover generation failed: {exc}", "error")
         return redirect(url_for("albums.detail", album_id=album_id))

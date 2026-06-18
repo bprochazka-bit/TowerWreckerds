@@ -615,22 +615,33 @@ def _art_prompt(subject, descriptor, genre, tags, concept=""):
     return ", ".join(b for b in bits if b)
 
 
-def generate_album_cover(album_id):
-    """Render an album-cover image via sd.cpp (or a placeholder in mock mode).
-    Stores the relative path on the release and returns it."""
+def build_album_cover_prompt(album_id):
+    """The auto-built cover-art prompt for an album (from title/owner/genre/
+    concept/style tags). Shown in the UI so it can be tweaked before generating."""
     album = query("SELECT * FROM release WHERE id = ?", (album_id,), one=True)
     if not album:
         raise ValueError("album not found")
     owner_name, genre = _owner_name_genre(album["owner_type"], album["owner_id"])
     tags = jload(album["style_tags"], [])
-    prompt = _art_prompt(
+    return _art_prompt(
         f'album cover art for "{album["title"]}" by {owner_name}',
         f'a {album["type"]} release', genre, tags, album["concept"] or "")
+
+
+def generate_album_cover(album_id, prompt=None):
+    """Render an album-cover image via sd.cpp (or a placeholder in mock mode).
+    Uses `prompt` if given (the user's edited text), else the auto-built one.
+    Stores the cover path and the prompt used on the release; returns the path."""
+    album = query("SELECT * FROM release WHERE id = ?", (album_id,), one=True)
+    if not album:
+        raise ValueError("album not found")
+    prompt = (prompt or "").strip() or build_album_cover_prompt(album_id)
     os.makedirs(COVER_DIR, exist_ok=True)
     out = os.path.join(COVER_DIR, f"album{album_id}.png")
     ImageGenClient().generate(prompt, out, seed=album_id * 7 + 13)
     rel = os.path.relpath(out, ROOT)
-    execute("UPDATE release SET cover_path=? WHERE id=?", (rel, album_id))
+    execute("UPDATE release SET cover_path=?, cover_prompt=? WHERE id=?",
+            (rel, prompt, album_id))
     return rel
 
 

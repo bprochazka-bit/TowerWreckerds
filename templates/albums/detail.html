@@ -44,8 +44,14 @@
   {% endif %}
   <form class="gen-form" data-working="Generating cover via sd.cpp" method="post"
         action="{{ url_for('albums.cover', album_id=album.id) }}" style="margin-top:12px">
-    <button class="btn{{ '' if album.cover_path else ' primary' }}" type="submit">
-      {{ 'Regenerate cover' if album.cover_path else 'Generate cover' }}</button>
+    <label>Prompt</label>
+    <textarea name="prompt" rows="4">{{ cover_prompt }}</textarea>
+    <p class="muted" style="font-size:12px;margin-top:6px">Tweak the prompt before
+      generating. Clear it to fall back to the auto-built prompt.</p>
+    <div class="btn-row">
+      <button class="btn{{ '' if album.cover_path else ' primary' }}" type="submit">
+        {{ 'Regenerate cover' if album.cover_path else 'Generate cover' }}</button>
+    </div>
   </form>
 </div>
 
