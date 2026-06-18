@@ -122,6 +122,18 @@ h3 { font-size: 15px; margin: 0 0 8px; }
   border-bottom: 1px solid var(--line-soft); padding-bottom: 8px; margin-bottom: 14px;
 }
 
+/* Collapsible panels (progressive enhancement; app.js wraps the body). */
+.strip-label.panel-toggle { cursor: pointer; user-select: none;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.strip-label.panel-toggle::after { content: "\25BE"; font-size: 11px;
+  color: var(--muted-2); transition: transform .15s ease; }
+.panel.collapsed .strip-label.panel-toggle { margin-bottom: 0; padding-bottom: 0;
+  border-bottom: 0; }
+.panel.collapsed .strip-label.panel-toggle::after { transform: rotate(-90deg); }
+.panel.collapsed .panel-body { display: none; }
+
+audio { max-width: 100%; }
+
 .grid { display: grid; gap: 14px; }
 .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
 .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
@@ -375,9 +387,18 @@ audio { width: 100%; margin-top: 10px; filter: sepia(.2) saturate(.8); }
   .rail { width: 100%; height: auto; position: static; flex: none; }
   .rail nav { flex-direction: row; flex-wrap: wrap; }
   .work { padding: 22px 18px 60px; }
-  .grid.cols-2, .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr 1fr; }
+  /* Stack side-by-side panels (e.g. Production brief + Lyrics) on small screens. */
+  .grid.cols-2 { grid-template-columns: 1fr; }
+  .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr 1fr; }
   .field-row, .field-row-3 { grid-template-columns: 1fr; }
   .kv { grid-template-columns: 1fr; }
+  .page-head { flex-direction: column; align-items: flex-start; }
+  .lyrics-edit { min-height: 200px; }
+}
+@media (max-width: 540px) {
+  .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; }
+  .work { padding: 18px 14px 56px; }
+  .rename-form, .tag-add { max-width: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; scroll-behavior: auto; }

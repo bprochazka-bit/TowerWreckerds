@@ -36,3 +36,34 @@
     }
   });
 })();
+
+// Collapsible panels: click a panel's header to fold it away. State persists
+// per page in localStorage so collapses stick. Progressive enhancement — the
+// markup works fine with JS disabled (panels are just always open).
+(function () {
+  function storeKey(label) {
+    return "mw:collapse:" + location.pathname + ":" + label;
+  }
+  document.querySelectorAll(".panel").forEach(function (panel) {
+    const head = panel.firstElementChild;
+    if (!head || !head.classList.contains("strip-label")) return;
+    // Don't make a panel collapsible if its header is the only thing in it.
+    if (!head.nextSibling) return;
+
+    const body = document.createElement("div");
+    body.className = "panel-body";
+    while (head.nextSibling) body.appendChild(head.nextSibling);
+    panel.appendChild(body);
+    head.classList.add("panel-toggle");
+
+    const key = storeKey((head.textContent || "").trim());
+    try {
+      if (localStorage.getItem(key) === "1") panel.classList.add("collapsed");
+    } catch (e) { /* localStorage may be unavailable */ }
+
+    head.addEventListener("click", function () {
+      const collapsed = panel.classList.toggle("collapsed");
+      try { localStorage.setItem(key, collapsed ? "1" : "0"); } catch (e) {}
+    });
+  });
+})();
