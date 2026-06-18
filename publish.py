@@ -31,6 +31,15 @@ class PublishError(RuntimeError):
 
 # --- paths / naming ---------------------------------------------------------
 
+def encoder_status():
+    """Report the MP3 encoder available on this host. Returns (ok, label)."""
+    if shutil.which("ffmpeg"):
+        return True, "ffmpeg detected — tracks publish as MP3"
+    if shutil.which("lame"):
+        return True, "lame detected — WAV tracks publish as MP3"
+    return False, "no ffmpeg or lame found — tracks are copied as WAV (install one for MP3)"
+
+
 def _publish_root():
     p = (all_settings().get("publish_path") or "").strip()
     return p or os.path.join(ROOT, "published")

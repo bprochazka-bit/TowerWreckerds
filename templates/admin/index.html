@@ -132,8 +132,11 @@
       <input type="text" name="publish_path" value="{{ settings.publish_path }}"
              placeholder="leave blank for &lt;app&gt;/published">
       <p class="muted" style="font-size:12px;margin-top:6px">Tracks/albums publish as
-        tagged MP3s here: Artist/Album/NN - Title.mp3 + cover.png. Needs ffmpeg or
-        lame installed for MP3 encoding (otherwise the master is copied as-is).</p>
+        tagged MP3s here: Artist/Album/NN - Title.mp3 + cover.png.</p>
+      <div class="btn-row">
+        <span class="status {{ 'ok' if encoder_ok else 'error' }}">
+          MP3 encoder: {{ encoder_msg }}</span>
+      </div>
     </div>
 
     <div class="panel">

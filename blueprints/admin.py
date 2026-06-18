@@ -14,6 +14,7 @@ from database import (
 from backends.llm import LLMClient
 from backends.acestep import ACEStepClient
 from backends.imagegen import ImageGenClient
+import publish
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -37,8 +38,10 @@ def admin_home():
     settings = all_settings()
     genres = query("SELECT * FROM genre ORDER BY name")
     style_tags = query("SELECT * FROM style_tag ORDER BY category, name")
+    enc_ok, enc_msg = publish.encoder_status()
     return render_template("admin/index.html", settings=settings,
-                           genres=genres, style_tags=style_tags)
+                           genres=genres, style_tags=style_tags,
+                           encoder_ok=enc_ok, encoder_msg=enc_msg)
 
 
 @bp.route("/settings", methods=["POST"])
