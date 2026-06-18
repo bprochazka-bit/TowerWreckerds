@@ -87,6 +87,28 @@
 </div>
 
 <div class="panel" style="margin-top:16px">
+  <div class="strip-label">Lyric source</div>
+  <p class="muted" style="font-size:12px">These feed lyric generation. Tweak them
+    (and the direction) then <strong>Regenerate lyrics</strong> to rewrite only the
+    lyrics — tempo, key, and tags are left as-is. Global style lives in Admin.</p>
+  <form method="post" action="{{ url_for('tracks.save_source', track_id=track.id) }}">
+    <label>Subject</label>
+    <input type="text" name="subject" value="{{ track.subject or '' }}">
+    <label style="margin-top:10px">Summary</label>
+    <textarea name="summary" rows="3">{{ track.summary or '' }}</textarea>
+    <label style="margin-top:10px">Lyric direction <span class="muted">(optional)</span></label>
+    <textarea name="lyric_notes" rows="3"
+      placeholder="e.g. impressionistic and fragmented, surreal imagery, non-narrative, second-person, sparse">{{ track.lyric_notes or '' }}</textarea>
+    <div class="btn-row"><button class="btn sm" type="submit">Save source</button></div>
+  </form>
+  <form class="gen-form" data-working="Regenerating lyrics" method="post"
+        action="{{ url_for('tracks.regenerate_lyrics', track_id=track.id) }}" style="margin-top:8px"
+        {% if track.lyrics %}onsubmit="return confirm('Regenerate lyrics? This replaces the current lyrics.')"{% endif %}>
+    <button class="btn" type="submit">Regenerate lyrics</button>
+  </form>
+</div>
+
+<div class="panel" style="margin-top:16px">
   <div class="strip-label">Master take</div>
   {% if track.audio_path %}
     <audio controls preload="none" src="{{ track.audio_path|audio_url }}"></audio>

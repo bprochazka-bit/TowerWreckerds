@@ -12,7 +12,7 @@ import wave
 from database import (
     all_settings, execute, jdump, jload, now_iso, query,
 )
-from backends.llm import LLMClient
+from backends.llm import LLMClient, LLMError
 from backends.acestep import ACEStepClient
 from backends.imagegen import ImageGenClient
 
@@ -326,6 +326,11 @@ LYRIC_RULES = (
 )
 
 
+def _lyric_style_line():
+    s = (all_settings().get("lyrics_style") or "").strip()
+    return f"Lyrical style: {s}\n" if s else ""
+
+
 def _strip_lyric_directives(lyrics):
     """Remove parenthetical stage directions/ad-libs from lyrics before they go
     to ACE-Step, which otherwise sings them. Square-bracket [section] structure
@@ -484,7 +489,7 @@ Return JSON with keys:
   duration_seconds (int).
 Lyrics must fit the subject and the artist's voice.
 
-{LYRIC_RULES}
+{_lyric_style_line()}{LYRIC_RULES}
 """
     data = llm.generate_json(user, system=system)
     base_cues = jload(t["style_tags"], [])
@@ -497,6 +502,47 @@ Lyrics must fit the subject and the artist's voice.
          jdump(data.get("environmentals", [])),
          data.get("duration_seconds", t["duration"]), track_id),
     )
+    return track_id
+
+
+def regenerate_lyrics(track_id):
+    """Rewrite ONLY the lyrics for a track, from its subject/summary/style and an
+    optional lyric direction — leaving tempo, key, style tags, etc. untouched.
+    Honors the global lyric-style setting."""
+    llm = LLMClient()
+    t = query("SELECT * FROM track WHERE id = ?", (track_id,), one=True)
+    if not t:
+        raise ValueError("track not found")
+    ctx = ""
+    if t["release_id"]:
+        rel = query("SELECT owner_type, owner_id FROM release WHERE id = ?",
+                    (t["release_id"],), one=True)
+        if rel:
+            ctx, _ = _owner_context(rel["owner_type"], rel["owner_id"], for_lyrics=True)
+    notes = (t["lyric_notes"] or "").strip() if "lyric_notes" in t.keys() else ""
+    cues = ", ".join(jload(t["style_tags"], []))
+    system = "You are a songwriter writing lyrics to fit a track brief."
+    user = f"""{ctx}
+Track: "{t['title']}"{f" (role: {t['role']})" if t['role'] else ''}
+Subject: {t['subject'] or '(none)'}
+Summary: {t['summary'] or '(none)'}
+Mood: {t['mood'] or '(unspecified)'} | tempo: {t['tempo'] or '?'} bpm
+Style cues: {cues or '(none)'}
+{('Lyric direction: ' + notes) if notes else ''}
+
+Write the full lyrics with [verse]/[chorus] section tags. Return JSON with a
+single key "lyrics" whose value is the lyric text.
+
+{_lyric_style_line()}{LYRIC_RULES}
+"""
+    data = llm.generate_json(user, system=system)
+    if isinstance(data, dict):
+        lyrics = data.get("lyrics") or data.get("text") or ""
+    else:
+        lyrics = data if isinstance(data, str) else ""
+    if not (lyrics or "").strip():
+        raise LLMError("model returned no lyrics")
+    execute("UPDATE track SET lyrics=? WHERE id=?", (lyrics, track_id))
     return track_id
 
 
@@ -615,7 +661,7 @@ Return JSON with keys:
   style_tags (array), tempo (bpm int), key, mood,
   environmentals (array), duration_seconds (int).
 
-{LYRIC_RULES}
+{_lyric_style_line()}{LYRIC_RULES}
 """
     data = llm.generate_json(user, system=system)
     final_tags = data.get("style_tags", []) + _refinement_tags(refinement)
@@ -717,7 +763,7 @@ Reimagine this as a cover. Return JSON with keys:
   style_tags (array), tempo (bpm int), key, mood,
   environmentals (array), duration_seconds (int).
 
-{LYRIC_RULES}
+{_lyric_style_line()}{LYRIC_RULES}
 """
     data = llm.generate_json(user, system=system)
     final_tags = data.get("style_tags", []) + _refinement_tags(refinement)

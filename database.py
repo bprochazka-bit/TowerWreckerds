@@ -123,6 +123,7 @@ CREATE TABLE IF NOT EXISTS track (
     reference_audio TEXT,           -- reference track this is a cover of (relative to ref library)
     published_path TEXT,            -- where the published MP3 was last written
     influences TEXT,                -- per-track "sounds like" snapshot (freeform/cover)
+    lyric_notes TEXT,               -- free-text direction for lyric (re)generation
     status TEXT DEFAULT 'briefed',  -- briefed | producing | rendered | failed | published
     source TEXT DEFAULT 'album',    -- album | freeform | cover
     created_at TEXT,
@@ -212,6 +213,10 @@ DEFAULT_SETTINGS = {
     # Strip parenthetical directives from lyrics before rendering so the vocal
     # model doesn't sing them aloud.
     "lyrics_strip_parentheticals": "1",
+    # Global lyrical-style guidance fed to every lyric prompt.
+    "lyrics_style": ("Favor poetic, evocative, image-driven lyrics — lean on "
+                     "metaphor, mood, and sensory detail rather than literal, "
+                     "blow-by-blow storytelling."),
     "mock_mode": "1",                     # 1 = synthesize placeholders, no live backends
     # Reference-music repository: a folder of existing audio used as a reference
     # when generating cover versions of songs.
@@ -497,6 +502,7 @@ MIGRATIONS = [
     ("track", "reference_audio", "TEXT"),
     ("track", "published_path", "TEXT"),
     ("track", "influences", "TEXT"),
+    ("track", "lyric_notes", "TEXT"),
     ("release", "cover_path", "TEXT"),
     ("release", "cover_prompt", "TEXT"),
     ("artist", "influences", "TEXT"),

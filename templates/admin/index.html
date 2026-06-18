@@ -42,6 +42,13 @@
                  value="{{ settings.llm_max_tokens }}"></div>
       </div>
 
+      <label>Lyric style guidance</label>
+      <textarea name="lyrics_style" rows="3"
+        placeholder="How lyrics should read — e.g. poetic and image-driven vs literal storytelling">{{ settings.lyrics_style }}</textarea>
+      <p class="muted" style="font-size:12px;margin-top:6px">Added to every lyric
+        prompt (initial brief and Regenerate lyrics). Raise Temperature for more
+        variation between runs — lyric generation isn't seeded.</p>
+
       <div class="btn-row">
         <button class="btn ghost sm" type="button"
                 hx-post="{{ url_for('admin.test_llm') }}"

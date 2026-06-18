@@ -168,6 +168,17 @@ by its high zero-crossing rate and low crest factor, so tonal endings and
 fade-outs are left intact. It works on WAV output only. Each track page also has
 a **Trim trailing noise** button to clean up tracks that were rendered earlier.
 
+### Lyric style and regeneration
+
+Lyric generation is **not seeded** — it comes from the language model, so it
+varies each run (raise *Temperature* in Admin for more variation). Two levers
+shape it: a global **Lyric style guidance** in Admin (defaults to favouring
+poetic, image-driven lyrics over literal storytelling), added to every lyric
+prompt; and a per-track **Lyric source** panel where you edit the subject,
+summary, and a free-text **lyric direction**, then hit **Regenerate lyrics** to
+rewrite *only* the lyrics from those inputs — tempo, key, and tags are left
+untouched.
+
 ### Clean lyrics
 
 Lyric prompts deliberately exclude band-member names (the lineup is dropped from

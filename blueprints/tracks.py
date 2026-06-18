@@ -147,6 +147,29 @@ def save_lyrics(track_id):
     return redirect(url_for("tracks.detail", track_id=track_id))
 
 
+@bp.route("/<int:track_id>/source", methods=["POST"])
+def save_source(track_id):
+    if not query("SELECT 1 FROM track WHERE id=?", (track_id,), one=True):
+        return redirect(url_for("tracks.library"))
+    execute("UPDATE track SET subject=?, summary=?, lyric_notes=? WHERE id=?",
+            (request.form.get("subject", "").strip(),
+             request.form.get("summary", "").strip(),
+             request.form.get("lyric_notes", "").strip(), track_id))
+    flash("Lyric source saved.", "ok")
+    return redirect(url_for("tracks.detail", track_id=track_id))
+
+
+@bp.route("/<int:track_id>/regenerate-lyrics", methods=["POST"])
+def regenerate_lyrics(track_id):
+    try:
+        generation.regenerate_lyrics(track_id)
+    except (LLMError, ValueError) as exc:
+        flash(f"Lyric regeneration failed: {exc}", "error")
+        return redirect(url_for("tracks.detail", track_id=track_id))
+    flash("Lyrics regenerated.", "ok")
+    return redirect(url_for("tracks.detail", track_id=track_id))
+
+
 @bp.route("/<int:track_id>/tags/add", methods=["POST"])
 def add_tag(track_id):
     t = query("SELECT style_tags FROM track WHERE id=?", (track_id,), one=True)
