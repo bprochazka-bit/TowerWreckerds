@@ -199,6 +199,9 @@ DEFAULT_SETTINGS = {
     # Cover (audio2audio) controls for acestep.cpp's task_type="cover".
     "acestep_cover_strength": "0.6",      # audio_cover_strength: 0..1 fraction of DiT steps
     "acestep_cover_noise": "0.0",         # cover_noise_strength: blend noise with source latents
+    # Strip parenthetical directives from lyrics before rendering so the vocal
+    # model doesn't sing them aloud.
+    "lyrics_strip_parentheticals": "1",
     "mock_mode": "1",                     # 1 = synthesize placeholders, no live backends
     # Reference-music repository: a folder of existing audio used as a reference
     # when generating cover versions of songs.

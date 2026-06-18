@@ -165,6 +165,16 @@ by its high zero-crossing rate and low crest factor, so tonal endings and
 fade-outs are left intact. It works on WAV output only. Each track page also has
 a **Trim trailing noise** button to clean up tracks that were rendered earlier.
 
+### Clean lyrics
+
+Lyric prompts deliberately exclude band-member names (the lineup is dropped from
+the performer context when writing lyrics) and instruct the model to avoid
+parenthetical stage directions, so names and notes like `(guitar solo)` don't
+end up sung. As a backstop, **Strip parenthetical directives** (Admin, on by
+default) removes any `(…)` from the lyrics sent to ACE-Step at render time while
+preserving `[verse]`/`[chorus]` structure tags. Turn it off if you write backing
+vocals in parentheses that you *want* sung.
+
 ---
 
 ## Cover songs (reference-music repository)

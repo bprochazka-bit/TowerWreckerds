@@ -6,6 +6,7 @@ runs the render-N-candidates / pick-best loop against ACE-Step.
 """
 
 import os
+import re
 import wave
 
 from database import (
@@ -205,9 +206,15 @@ The backstory should reference how these specific people came together.
 # Album: concept + tracklist
 # ---------------------------------------------------------------------------
 
-def _owner_context(owner_type, owner_id):
+def _owner_context(owner_type, owner_id, for_lyrics=False):
+    """Performer context for prompts. When `for_lyrics` is set, the band lineup
+    (member names/instruments) is omitted so member names don't leak into the
+    sung lyrics; genre and backstory are kept for grounding."""
     if owner_type == "band":
         b = query("SELECT * FROM band WHERE id = ?", (owner_id,), one=True)
+        if for_lyrics:
+            return (f"Band: {b['name']} | genre: {b['primary_genre']}\n"
+                    f"Backstory: {b['backstory']}"), b["primary_genre"]
         members = query(
             "SELECT a.name, m.instrument FROM membership m JOIN artist a ON a.id = m.artist_id"
             " WHERE m.band_id = ? AND m.left_on IS NULL", (owner_id,))
@@ -217,6 +224,32 @@ def _owner_context(owner_type, owner_id):
     a = query("SELECT * FROM artist WHERE id = ?", (owner_id,), one=True)
     return (f"Artist: {a['name']} | genre: {a['primary_genre']} | region: {a['region']}\n"
             f"Persona: {a['persona']}\nRefinement: {a['refinement']}"), a["primary_genre"]
+
+
+# Shared lyric-writing rules appended to every prompt that authors lyrics, to
+# (1) keep performer/band-member names out of the sung words and (2) stop the
+# model emitting parenthetical stage directions that ACE-Step vocalizes.
+LYRIC_RULES = (
+    "Lyric rules: write only words meant to be sung. Use [section] tags on their "
+    "own lines for structure (e.g. [verse], [chorus], [bridge]). Do NOT include "
+    "stage directions, ad-libs, or production notes in parentheses — for example "
+    "'(guitar solo)', '(whisper)', '(x2)', '(instrumental)'. Anything inside "
+    "parentheses gets sung aloud by the vocal model, so leave it out entirely. "
+    "Never mention the performer's or any band member's name in the lyrics."
+)
+
+
+def _strip_lyric_directives(lyrics):
+    """Remove parenthetical stage directions/ad-libs from lyrics before they go
+    to ACE-Step, which otherwise sings them. Square-bracket [section] structure
+    tags are preserved. Whitespace/blank lines are tidied."""
+    if not lyrics:
+        return lyrics
+    text = re.sub(r"\([^()]*\)", "", lyrics)   # drop (parenthetical) groups
+    text = "\n".join(re.sub(r"[ \t]{2,}", " ", ln).strip()
+                     for ln in text.splitlines())
+    text = re.sub(r"\n{3,}", "\n\n", text)     # collapse runs of blank lines
+    return text.strip()
 
 
 def generate_album(owner_type, owner_id, ethos, style_tags, rel_type="album", track_count=None):
@@ -281,7 +314,7 @@ def brief_track_from_album(track_id):
     llm = LLMClient()
     t = query("SELECT * FROM track WHERE id = ?", (track_id,), one=True)
     rel = query("SELECT * FROM release WHERE id = ?", (t["release_id"],), one=True)
-    ctx, genre = _owner_context(rel["owner_type"], rel["owner_id"])
+    ctx, genre = _owner_context(rel["owner_type"], rel["owner_id"], for_lyrics=True)
     refinement = _owner_refinement(rel["owner_type"], rel["owner_id"])
     system = "You are a songwriter and producer turning a track concept into a recordable brief."
     user = f"""{ctx}
@@ -300,6 +333,8 @@ Return JSON with keys:
   environmentals (array, e.g. room, reverb, tape, vinyl crackle),
   duration_seconds (int).
 Lyrics must fit the subject and the artist's voice.
+
+{LYRIC_RULES}
 """
     data = llm.generate_json(user, system=system)
     base_cues = jload(t["style_tags"], [])
@@ -418,7 +453,7 @@ def create_freeform_track(prompt, owner_type=None, owner_id=None):
     ctx = ""
     refinement = 0.5
     if owner_type and owner_id:
-        ctx, _ = _owner_context(owner_type, owner_id)
+        ctx, _ = _owner_context(owner_type, owner_id, for_lyrics=True)
         refinement = _owner_refinement(owner_type, owner_id)
     system = "You turn a loose idea into a complete, recordable song brief."
     ctx_block = f"Performer context:\n{ctx}\n" if ctx else ""
@@ -429,6 +464,8 @@ Return JSON with keys:
   lyrics (with [verse]/[chorus] tags),
   style_tags (array), tempo (bpm int), key, mood,
   environmentals (array), duration_seconds (int).
+
+{LYRIC_RULES}
 """
     data = llm.generate_json(user, system=system)
     final_tags = data.get("style_tags", []) + _refinement_tags(refinement)
@@ -512,7 +549,7 @@ def create_cover_track(reference_rel, owner_type=None, owner_id=None, notes=""):
     ctx = ""
     refinement = 0.5
     if owner_type and owner_id:
-        ctx, _ = _owner_context(owner_type, owner_id)
+        ctx, _ = _owner_context(owner_type, owner_id, for_lyrics=True)
         refinement = _owner_refinement(owner_type, owner_id)
     system = ("You reinterpret an existing song as a cover, recast in a new "
               "performer's voice and style.")
@@ -526,6 +563,8 @@ Reimagine this as a cover. Return JSON with keys:
   lyrics (with [verse]/[chorus] tags; write fresh lyrics fitting the title/theme),
   style_tags (array), tempo (bpm int), key, mood,
   environmentals (array), duration_seconds (int).
+
+{LYRIC_RULES}
 """
     data = llm.generate_json(user, system=system)
     final_tags = data.get("style_tags", []) + _refinement_tags(refinement)
@@ -616,6 +655,8 @@ def render_track(track_id, progress=None, cancel=None):
     if env:
         tags = f"{tags}, {env}" if tags else env
     lyrics = t["lyrics"] or ""
+    if str(settings.get("lyrics_strip_parentheticals", "1")) in ("1", "true", "True", "on"):
+        lyrics = _strip_lyric_directives(lyrics)
     duration = t["duration"] or 180
 
     try:

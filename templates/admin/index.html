@@ -92,6 +92,12 @@
       </label>
 
       <label class="check" style="margin-top:16px">
+        <input type="checkbox" name="lyrics_strip_parentheticals" {{ 'checked' if settings.lyrics_strip_parentheticals == '1' }}>
+        <span>Strip parenthetical directives from lyrics before rendering, so the
+          vocal model doesn't sing notes like "(guitar solo)" aloud</span>
+      </label>
+
+      <label class="check" style="margin-top:16px">
         <input type="checkbox" name="mock_mode" {{ 'checked' if settings.mock_mode == '1' }}>
         <span>Mock mode — synthesize placeholder audio locally, no ACE-Step required</span>
       </label>
