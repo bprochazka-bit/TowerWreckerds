@@ -79,6 +79,15 @@ def update_influences(artist_id):
     return redirect(url_for("artists.detail", artist_id=artist_id))
 
 
+@bp.route("/<int:artist_id>/vocal", methods=["POST"])
+def update_vocal(artist_id):
+    v = request.form.get("vocal", "").strip().lower()
+    execute("UPDATE artist SET vocal=? WHERE id=?",
+            (v if v in ("female", "male", "androgynous") else "", artist_id))
+    flash("Lead vocal saved — applied to this artist's renders.", "ok")
+    return redirect(url_for("artists.detail", artist_id=artist_id))
+
+
 @bp.route("/<int:artist_id>/delete", methods=["POST"])
 def delete(artist_id):
     execute("DELETE FROM artist WHERE id = ?", (artist_id,))

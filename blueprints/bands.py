@@ -90,6 +90,15 @@ def update_influences(band_id):
     return redirect(url_for("bands.detail", band_id=band_id))
 
 
+@bp.route("/<int:band_id>/vocal", methods=["POST"])
+def update_vocal(band_id):
+    v = request.form.get("vocal", "").strip().lower()
+    execute("UPDATE band SET vocal=? WHERE id=?",
+            (v if v in ("female", "male", "androgynous") else "", band_id))
+    flash("Lead vocal saved — applied to this band's renders.", "ok")
+    return redirect(url_for("bands.detail", band_id=band_id))
+
+
 @bp.route("/<int:band_id>/delete", methods=["POST"])
 def delete(band_id):
     execute("DELETE FROM band WHERE id = ?", (band_id,))

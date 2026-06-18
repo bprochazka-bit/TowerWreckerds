@@ -83,6 +83,7 @@ def generate_artist(hints):
     )
     user = f"""Create one musical artist as JSON with exactly these keys:
   name, persona, backstory, region, primary_genre, secondary_genres (array of 0-2),
+  gender (the lead vocal: one of female, male, androgynous),
   stage (one of: emerging, rising, established, veteran),
   refinement (0.0-1.0 number reflecting how polished their production is).
 
@@ -94,11 +95,26 @@ region drives accent and language, so pick a real place.
     return _persist_artist(data)
 
 
+VOCAL_VALUES = ("female", "male", "androgynous")
+
+
+def _norm_vocal(value):
+    """Normalise a freeform gender/vocal string to '', female, male or androgynous."""
+    v = (value or "").strip().lower()
+    if v in ("female", "f", "woman", "women", "feminine"):
+        return "female"
+    if v in ("male", "m", "man", "men", "masculine"):
+        return "male"
+    if v in ("androgynous", "nonbinary", "non-binary", "neutral", "ambiguous"):
+        return "androgynous"
+    return v if v in VOCAL_VALUES else ""
+
+
 def _persist_artist(data, artist_type="solo"):
     aid = execute(
         "INSERT INTO artist (name, type, persona, backstory, region, primary_genre,"
-        " secondary_genres, stage, refinement, created_at)"
-        " VALUES (?,?,?,?,?,?,?,?,?,?)",
+        " secondary_genres, stage, refinement, vocal, created_at)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (
             data.get("name", "Untitled Artist"),
             artist_type,
@@ -109,6 +125,7 @@ def _persist_artist(data, artist_type="solo"):
             jdump(data.get("secondary_genres", [])),
             data.get("stage", "emerging"),
             float(data.get("refinement", 0.3) or 0.3),
+            _norm_vocal(data.get("gender") or data.get("vocal")),
             now_iso(),
         ),
     )
@@ -129,7 +146,9 @@ def generate_band_from_scratch(hints):
     user = f"""Invent a band as JSON with keys:
   name, primary_genre, backstory,
   members: array of exactly {size} objects, each with keys
-     name, persona, region, instrument, refinement (0.0-1.0).
+     name, persona, region, instrument, gender (female, male, or androgynous),
+     refinement (0.0-1.0).
+Mark the lead singer's instrument as "lead vocals".
 Choose primary_genre from: {genres}.
 Members should feel like real people with chemistry and tension.
 {("Constraints: " + str(asked)) if asked else ""}
@@ -149,6 +168,7 @@ Members should feel like real people with chemistry and tension.
                 "region": m.get("region", ""),
                 "primary_genre": data.get("primary_genre", ""),
                 "refinement": m.get("refinement", 0.3),
+                "gender": m.get("gender", ""),
             },
             artist_type="band-member",
         )
@@ -218,26 +238,78 @@ def _owner_influences(owner_type, owner_id):
     return (r["influences"] or "").strip() if r and "influences" in r.keys() else ""
 
 
+# --- lead vocal -------------------------------------------------------------
+
+_VOCAL_GENDER_RE = re.compile(r"\b(?:fe)?male\b|\bandrogynous\b", re.I)
+
+
+def _is_vocal_directive(text):
+    """True if a caption/tag segment is a gendered vocal directive (so it can be
+    overridden by the performer's actual vocal). 'layered vocal harmonies' (no
+    gender) is left alone."""
+    low = text.lower()
+    return "vocal" in low and _VOCAL_GENDER_RE.search(low) is not None
+
+
+def _band_lead_vocal(band_id):
+    """The lead vocalist's gender for a band: the vocal of the member whose
+    instrument mentions vocals (preferring 'lead'). '' if none set."""
+    rows = query(
+        "SELECT a.vocal AS vocal, m.instrument AS instrument FROM membership m"
+        " JOIN artist a ON a.id = m.artist_id"
+        " WHERE m.band_id = ? AND m.left_on IS NULL", (band_id,))
+    singers = [r for r in rows if (r["instrument"] or "").lower().find("vocal") >= 0]
+    singers.sort(key=lambda r: 0 if "lead" in (r["instrument"] or "").lower() else 1)
+    for r in singers:
+        if (r["vocal"] or "").strip():
+            return r["vocal"].strip()
+    return ""
+
+
+def _owner_vocal(owner_type, owner_id):
+    """The lead-vocal gender for a performer: '', female, male or androgynous.
+    Bands use their override if set, else the lead vocalist member's gender."""
+    if not owner_type or owner_id is None:
+        return ""
+    if owner_type == "band":
+        b = query("SELECT vocal FROM band WHERE id = ?", (owner_id,), one=True)
+        override = (b["vocal"] or "").strip() if b and "vocal" in b.keys() else ""
+        return override or _band_lead_vocal(owner_id)
+    a = query("SELECT vocal FROM artist WHERE id = ?", (owner_id,), one=True)
+    return (a["vocal"] or "").strip() if a and "vocal" in a.keys() else ""
+
+
+def _apply_vocal_to_tags(tags, vocal):
+    """Drop any gendered-vocal tags and append the performer's actual vocal."""
+    if not vocal:
+        return tags
+    kept = [t for t in tags if not _is_vocal_directive(t)]
+    kept.append(f"{vocal} vocal")
+    return kept
+
+
 def _owner_context(owner_type, owner_id, for_lyrics=False):
     """Performer context for prompts. When `for_lyrics` is set, the band lineup
     (member names/instruments) is omitted so member names don't leak into the
     sung lyrics; genre, backstory, and influences are kept for grounding."""
+    voc = _owner_vocal(owner_type, owner_id)
+    voc_line = f"\nLead vocal: {voc}" if voc else ""
     if owner_type == "band":
         b = query("SELECT * FROM band WHERE id = ?", (owner_id,), one=True)
         infl = _infl_line(b["influences"] if "influences" in b.keys() else "")
         if for_lyrics:
             return (f"Band: {b['name']} | genre: {b['primary_genre']}\n"
-                    f"Backstory: {b['backstory']}{infl}"), b["primary_genre"]
+                    f"Backstory: {b['backstory']}{infl}{voc_line}"), b["primary_genre"]
         members = query(
             "SELECT a.name, m.instrument FROM membership m JOIN artist a ON a.id = m.artist_id"
             " WHERE m.band_id = ? AND m.left_on IS NULL", (owner_id,))
         lineup = ", ".join(f"{m['name']} ({m['instrument']})" for m in members)
         return (f"Band: {b['name']} | genre: {b['primary_genre']} | lineup: {lineup}\n"
-                f"Backstory: {b['backstory']}{infl}"), b["primary_genre"]
+                f"Backstory: {b['backstory']}{infl}{voc_line}"), b["primary_genre"]
     a = query("SELECT * FROM artist WHERE id = ?", (owner_id,), one=True)
     infl = _infl_line(a["influences"] if "influences" in a.keys() else "")
     return (f"Artist: {a['name']} | genre: {a['primary_genre']} | region: {a['region']}\n"
-            f"Persona: {a['persona']}\nRefinement: {a['refinement']}{infl}"), a["primary_genre"]
+            f"Persona: {a['persona']}\nRefinement: {a['refinement']}{infl}{voc_line}"), a["primary_genre"]
 
 
 # Shared lyric-writing rules appended to every prompt that authors lyrics, to
@@ -485,6 +557,8 @@ Return JSON with keys:
     data = llm.generate_json(user, system=system)
     final_tags = data.get("style_tags", []) + _refinement_tags(refinement)
     influence = _owner_influences(owner_type, owner_id) if (owner_type and owner_id) else ""
+    if owner_type and owner_id:
+        final_tags = _apply_vocal_to_tags(final_tags, _owner_vocal(owner_type, owner_id))
     tid = execute(
         "INSERT INTO track (position, role, title, subject, summary, lyrics, style_tags,"
         " tempo, song_key, mood, environmentals, duration, influences, status, source, created_at)"
@@ -585,6 +659,8 @@ Reimagine this as a cover. Return JSON with keys:
     data = llm.generate_json(user, system=system)
     final_tags = data.get("style_tags", []) + _refinement_tags(refinement)
     influence = _owner_influences(owner_type, owner_id) if (owner_type and owner_id) else ""
+    if owner_type and owner_id:
+        final_tags = _apply_vocal_to_tags(final_tags, _owner_vocal(owner_type, owner_id))
     tid = execute(
         "INSERT INTO track (position, role, title, subject, summary, lyrics, style_tags,"
         " tempo, song_key, mood, environmentals, duration, reference_audio, influences,"
@@ -682,16 +758,31 @@ def render_track(track_id, progress=None, cancel=None):
     env = ", ".join(jload(t["environmentals"], []))
     if env:
         tags = f"{tags}, {env}" if tags else env
-    # "Sounds like" influence: per-track snapshot (freeform/cover) or, for album
-    # tracks, the current owner's influence — injected into the ACE-Step caption.
-    influence = (t["influences"] or "").strip() if "influences" in t.keys() else ""
-    if not influence and t["release_id"]:
+
+    # Resolve the performer behind this track (album tracks own via the release;
+    # freeform/cover snapshot their influence/vocal at creation instead).
+    owner_type = owner_id = None
+    if t["release_id"]:
         rel = query("SELECT owner_type, owner_id FROM release WHERE id = ?",
                     (t["release_id"],), one=True)
         if rel:
-            influence = _owner_influences(rel["owner_type"], rel["owner_id"])
+            owner_type, owner_id = rel["owner_type"], rel["owner_id"]
+
+    # "Sounds like" influence: per-track snapshot (freeform/cover) or the album
+    # owner's current influence — injected into the ACE-Step caption.
+    influence = (t["influences"] or "").strip() if "influences" in t.keys() else ""
+    if not influence and owner_type:
+        influence = _owner_influences(owner_type, owner_id)
     if influence:
         tags = f"{tags}, {influence}" if tags else influence
+
+    # Lead-vocal gender wins over any default or LLM guess: drop a gendered vocal
+    # already in the caption and use the performer's actual vocal.
+    vocal = _owner_vocal(owner_type, owner_id)
+    if vocal:
+        segs = [s for s in (tags.split(", ") if tags else []) if s and not _is_vocal_directive(s)]
+        segs.append(f"{vocal} vocal")
+        tags = ", ".join(segs)
 
     lyrics = t["lyrics"] or ""
     if str(settings.get("lyrics_strip_parentheticals", "1")) in ("1", "true", "True", "on"):

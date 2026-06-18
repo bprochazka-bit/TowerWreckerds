@@ -188,6 +188,16 @@ re-render); standalone/cover tracks snapshot it when created. Descriptive
 phrases usually steer the audio model better than a bare artist name, and
 influence names are kept out of the sung lyrics.
 
+### Lead vocal
+
+Bands and solo artists carry a **lead vocal** gender (female / male /
+androgynous), auto-filled when generated and editable on the detail page. It's
+injected authoritatively into the ACE-Step caption for every track the
+performer renders — overriding any default or mismatched tag, so a female artist
+sings female without you adding a style tag. For bands it's read from the lead
+vocalist member (the one whose instrument is vocals), with a band-level override
+if you want to set it directly. Standalone/cover tracks snapshot it when created.
+
 ---
 
 ## Cover songs (reference-music repository)

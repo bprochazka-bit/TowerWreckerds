@@ -34,16 +34,34 @@
   </div>
 </div>
 
-<div class="panel" style="margin-top:16px">
-  <div class="strip-label">Sounds like / influences</div>
-  <form method="post" action="{{ url_for('artists.update_influences', artist_id=artist.id) }}">
-    <input type="text" name="influences" value="{{ artist.influences or '' }}"
-           placeholder="e.g. Sufjan Stevens; intimate folk, fingerpicked guitar, hushed vocals">
-    <p class="muted" style="font-size:12px;margin-top:6px">Added to the ACE-Step
-      caption for every track this artist renders, and used to steer the writing.
-      Descriptive phrases usually work better than a name alone.</p>
-    <div class="btn-row"><button class="btn sm" type="submit">Save influences</button></div>
-  </form>
+<div class="grid cols-2" style="margin-top:16px">
+  <div class="panel">
+    <div class="strip-label">Sounds like / influences</div>
+    <form method="post" action="{{ url_for('artists.update_influences', artist_id=artist.id) }}">
+      <input type="text" name="influences" value="{{ artist.influences or '' }}"
+             placeholder="e.g. Sufjan Stevens; intimate folk, fingerpicked guitar, hushed vocals">
+      <p class="muted" style="font-size:12px;margin-top:6px">Added to the ACE-Step
+        caption for every track this artist renders, and used to steer the writing.
+        Descriptive phrases usually work better than a name alone.</p>
+      <div class="btn-row"><button class="btn sm" type="submit">Save influences</button></div>
+    </form>
+  </div>
+  <div class="panel">
+    <div class="strip-label">Lead vocal</div>
+    <form method="post" action="{{ url_for('artists.update_vocal', artist_id=artist.id) }}">
+      <select name="vocal">
+        {% set v = artist.vocal or '' %}
+        <option value="" {{ 'selected' if not v }}>— unset (model decides) —</option>
+        <option value="female" {{ 'selected' if v == 'female' }}>female</option>
+        <option value="male" {{ 'selected' if v == 'male' }}>male</option>
+        <option value="androgynous" {{ 'selected' if v == 'androgynous' }}>androgynous</option>
+      </select>
+      <p class="muted" style="font-size:12px;margin-top:6px">Forces the lead-vocal
+        gender in the render caption for every track this artist sings, overriding
+        any default.</p>
+      <div class="btn-row"><button class="btn sm" type="submit">Save vocal</button></div>
+    </form>
+  </div>
 </div>
 
 <div class="grid cols-2" style="margin-top:16px">

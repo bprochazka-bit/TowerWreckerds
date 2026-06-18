@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS artist (
     popularity REAL DEFAULT 0.1,
     momentum REAL DEFAULT 0.0,
     influences TEXT,             -- "sounds like" reference artists/bands
+    vocal TEXT,                  -- lead vocal: '' | female | male | androgynous
     status TEXT DEFAULT 'active',
     created_at TEXT
 );
@@ -65,6 +66,7 @@ CREATE TABLE IF NOT EXISTS band (
     backstory TEXT,
     formed_on TEXT,
     influences TEXT,             -- "sounds like" reference artists/bands
+    vocal TEXT,                  -- lead vocal override: '' (derive from members) | female | male | androgynous
     status TEXT DEFAULT 'active',
     created_at TEXT
 );
@@ -495,6 +497,8 @@ MIGRATIONS = [
     ("release", "cover_prompt", "TEXT"),
     ("artist", "influences", "TEXT"),
     ("band", "influences", "TEXT"),
+    ("artist", "vocal", "TEXT"),
+    ("band", "vocal", "TEXT"),
 ]
 
 
