@@ -82,6 +82,14 @@ def detail(band_id):
                            releases=releases)
 
 
+@bp.route("/<int:band_id>/influences", methods=["POST"])
+def update_influences(band_id):
+    execute("UPDATE band SET influences=? WHERE id=?",
+            (request.form.get("influences", "").strip(), band_id))
+    flash("Influences saved — applied to this band's renders.", "ok")
+    return redirect(url_for("bands.detail", band_id=band_id))
+
+
 @bp.route("/<int:band_id>/delete", methods=["POST"])
 def delete(band_id):
     execute("DELETE FROM band WHERE id = ?", (band_id,))

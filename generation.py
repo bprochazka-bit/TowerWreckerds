@@ -206,24 +206,38 @@ The backstory should reference how these specific people came together.
 # Album: concept + tracklist
 # ---------------------------------------------------------------------------
 
+def _infl_line(influences):
+    influences = (influences or "").strip()
+    return f"\nSounds like / influences: {influences}" if influences else ""
+
+
+def _owner_influences(owner_type, owner_id):
+    """The performer's 'sounds like' influence text, or ''."""
+    table = "band" if owner_type == "band" else "artist"
+    r = query(f"SELECT influences FROM {table} WHERE id = ?", (owner_id,), one=True)
+    return (r["influences"] or "").strip() if r and "influences" in r.keys() else ""
+
+
 def _owner_context(owner_type, owner_id, for_lyrics=False):
     """Performer context for prompts. When `for_lyrics` is set, the band lineup
     (member names/instruments) is omitted so member names don't leak into the
-    sung lyrics; genre and backstory are kept for grounding."""
+    sung lyrics; genre, backstory, and influences are kept for grounding."""
     if owner_type == "band":
         b = query("SELECT * FROM band WHERE id = ?", (owner_id,), one=True)
+        infl = _infl_line(b["influences"] if "influences" in b.keys() else "")
         if for_lyrics:
             return (f"Band: {b['name']} | genre: {b['primary_genre']}\n"
-                    f"Backstory: {b['backstory']}"), b["primary_genre"]
+                    f"Backstory: {b['backstory']}{infl}"), b["primary_genre"]
         members = query(
             "SELECT a.name, m.instrument FROM membership m JOIN artist a ON a.id = m.artist_id"
             " WHERE m.band_id = ? AND m.left_on IS NULL", (owner_id,))
         lineup = ", ".join(f"{m['name']} ({m['instrument']})" for m in members)
         return (f"Band: {b['name']} | genre: {b['primary_genre']} | lineup: {lineup}\n"
-                f"Backstory: {b['backstory']}"), b["primary_genre"]
+                f"Backstory: {b['backstory']}{infl}"), b["primary_genre"]
     a = query("SELECT * FROM artist WHERE id = ?", (owner_id,), one=True)
+    infl = _infl_line(a["influences"] if "influences" in a.keys() else "")
     return (f"Artist: {a['name']} | genre: {a['primary_genre']} | region: {a['region']}\n"
-            f"Persona: {a['persona']}\nRefinement: {a['refinement']}"), a["primary_genre"]
+            f"Persona: {a['persona']}\nRefinement: {a['refinement']}{infl}"), a["primary_genre"]
 
 
 # Shared lyric-writing rules appended to every prompt that authors lyrics, to
@@ -235,7 +249,8 @@ LYRIC_RULES = (
     "stage directions, ad-libs, or production notes in parentheses — for example "
     "'(guitar solo)', '(whisper)', '(x2)', '(instrumental)'. Anything inside "
     "parentheses gets sung aloud by the vocal model, so leave it out entirely. "
-    "Never mention the performer's or any band member's name in the lyrics."
+    "Never mention the performer's or any band member's name in the lyrics, and "
+    "never name any reference or influence artist in the lyrics either."
 )
 
 
@@ -469,15 +484,16 @@ Return JSON with keys:
 """
     data = llm.generate_json(user, system=system)
     final_tags = data.get("style_tags", []) + _refinement_tags(refinement)
+    influence = _owner_influences(owner_type, owner_id) if (owner_type and owner_id) else ""
     tid = execute(
         "INSERT INTO track (position, role, title, subject, summary, lyrics, style_tags,"
-        " tempo, song_key, mood, environmentals, duration, status, source, created_at)"
-        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        " tempo, song_key, mood, environmentals, duration, influences, status, source, created_at)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (1, "single", data.get("title", "Untitled"), data.get("subject", ""),
          data.get("summary", ""), data.get("lyrics", ""), jdump(final_tags),
          data.get("tempo"), data.get("key", ""), data.get("mood", ""),
          jdump(data.get("environmentals", [])), data.get("duration_seconds", 180),
-         "briefed", "freeform", now_iso()),
+         influence, "briefed", "freeform", now_iso()),
     )
     return tid
 
@@ -568,16 +584,17 @@ Reimagine this as a cover. Return JSON with keys:
 """
     data = llm.generate_json(user, system=system)
     final_tags = data.get("style_tags", []) + _refinement_tags(refinement)
+    influence = _owner_influences(owner_type, owner_id) if (owner_type and owner_id) else ""
     tid = execute(
         "INSERT INTO track (position, role, title, subject, summary, lyrics, style_tags,"
-        " tempo, song_key, mood, environmentals, duration, reference_audio,"
+        " tempo, song_key, mood, environmentals, duration, reference_audio, influences,"
         " status, source, created_at)"
-        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (1, "cover", data.get("title", ref_title), data.get("subject", ""),
          data.get("summary", ""), data.get("lyrics", ""), jdump(final_tags),
          data.get("tempo"), data.get("key", ""), data.get("mood", ""),
          jdump(data.get("environmentals", [])), data.get("duration_seconds", 180),
-         reference_rel, "briefed", "cover", now_iso()),
+         reference_rel, influence, "briefed", "cover", now_iso()),
     )
     return tid
 
@@ -654,6 +671,17 @@ def render_track(track_id, progress=None, cancel=None):
     env = ", ".join(jload(t["environmentals"], []))
     if env:
         tags = f"{tags}, {env}" if tags else env
+    # "Sounds like" influence: per-track snapshot (freeform/cover) or, for album
+    # tracks, the current owner's influence — injected into the ACE-Step caption.
+    influence = (t["influences"] or "").strip() if "influences" in t.keys() else ""
+    if not influence and t["release_id"]:
+        rel = query("SELECT owner_type, owner_id FROM release WHERE id = ?",
+                    (t["release_id"],), one=True)
+        if rel:
+            influence = _owner_influences(rel["owner_type"], rel["owner_id"])
+    if influence:
+        tags = f"{tags}, {influence}" if tags else influence
+
     lyrics = t["lyrics"] or ""
     if str(settings.get("lyrics_strip_parentheticals", "1")) in ("1", "true", "True", "on"):
         lyrics = _strip_lyric_directives(lyrics)

@@ -71,6 +71,14 @@ def detail(artist_id):
                            releases=releases, secondary=jload(artist["secondary_genres"]))
 
 
+@bp.route("/<int:artist_id>/influences", methods=["POST"])
+def update_influences(artist_id):
+    execute("UPDATE artist SET influences=? WHERE id=?",
+            (request.form.get("influences", "").strip(), artist_id))
+    flash("Influences saved — applied to this artist's renders.", "ok")
+    return redirect(url_for("artists.detail", artist_id=artist_id))
+
+
 @bp.route("/<int:artist_id>/delete", methods=["POST"])
 def delete(artist_id):
     execute("DELETE FROM artist WHERE id = ?", (artist_id,))

@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS artist (
     deviation REAL DEFAULT 0.2,
     popularity REAL DEFAULT 0.1,
     momentum REAL DEFAULT 0.0,
+    influences TEXT,             -- "sounds like" reference artists/bands
     status TEXT DEFAULT 'active',
     created_at TEXT
 );
@@ -63,6 +64,7 @@ CREATE TABLE IF NOT EXISTS band (
     primary_genre TEXT,
     backstory TEXT,
     formed_on TEXT,
+    influences TEXT,             -- "sounds like" reference artists/bands
     status TEXT DEFAULT 'active',
     created_at TEXT
 );
@@ -113,6 +115,7 @@ CREATE TABLE IF NOT EXISTS track (
     audio_path TEXT,
     reference_audio TEXT,           -- reference track this is a cover of (relative to ref library)
     published_path TEXT,            -- where the published MP3 was last written
+    influences TEXT,                -- per-track "sounds like" snapshot (freeform/cover)
     status TEXT DEFAULT 'briefed',  -- briefed | producing | rendered | failed | published
     source TEXT DEFAULT 'album',    -- album | freeform | cover
     created_at TEXT,
@@ -486,7 +489,10 @@ SEED_STYLE_TAGS = [
 MIGRATIONS = [
     ("track", "reference_audio", "TEXT"),
     ("track", "published_path", "TEXT"),
+    ("track", "influences", "TEXT"),
     ("release", "cover_path", "TEXT"),
+    ("artist", "influences", "TEXT"),
+    ("band", "influences", "TEXT"),
 ]
 
 

@@ -175,6 +175,19 @@ default) removes any `(…)` from the lyrics sent to ACE-Step at render time whi
 preserving `[verse]`/`[chorus]` structure tags. Turn it off if you write backing
 vocals in parentheses that you *want* sung.
 
+### Sounds-like influences
+
+Each band and solo artist has a **Sounds like / influences** field (on its
+detail page). Whatever you put there — a reference act like *Barenaked Ladies*,
+or descriptive phrases like *quirky acoustic alt-pop, tight harmonies* — is
+injected into the ACE-Step caption for **every track that performer renders**,
+and is also given to the language model so it steers the tracklist, style tags,
+and arrangement. So you set it once at the band level rather than editing each
+track. For album tracks the influence is read live at render time (change it and
+re-render); standalone/cover tracks snapshot it when created. Descriptive
+phrases usually steer the audio model better than a bare artist name, and
+influence names are kept out of the sung lyrics.
+
 ---
 
 ## Cover songs (reference-music repository)
