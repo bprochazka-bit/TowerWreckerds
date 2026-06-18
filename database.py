@@ -124,6 +124,7 @@ CREATE TABLE IF NOT EXISTS track (
     published_path TEXT,            -- where the published MP3 was last written
     influences TEXT,                -- per-track "sounds like" snapshot (freeform/cover)
     lyric_notes TEXT,               -- free-text direction for lyric (re)generation
+    instrumental INTEGER DEFAULT 0, -- 1 = render with no vocals ([Instrumental])
     status TEXT DEFAULT 'briefed',  -- briefed | producing | rendered | failed | published
     source TEXT DEFAULT 'album',    -- album | freeform | cover
     created_at TEXT,
@@ -503,6 +504,7 @@ MIGRATIONS = [
     ("track", "published_path", "TEXT"),
     ("track", "influences", "TEXT"),
     ("track", "lyric_notes", "TEXT"),
+    ("track", "instrumental", "INTEGER DEFAULT 0"),
     ("release", "cover_path", "TEXT"),
     ("release", "cover_prompt", "TEXT"),
     ("artist", "influences", "TEXT"),

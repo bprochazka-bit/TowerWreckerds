@@ -1010,17 +1010,23 @@ def render_track(track_id, progress=None, cancel=None):
     if influence:
         tags = f"{tags}, {influence}" if tags else influence
 
+    instrumental = bool(t["instrumental"]) if "instrumental" in t.keys() else False
+
     # Lead-vocal gender wins over any default or LLM guess: drop a gendered vocal
-    # already in the caption and use the performer's actual vocal.
-    vocal = _owner_vocal(owner_type, owner_id)
+    # already in the caption and use the performer's actual vocal. Skipped for
+    # instrumentals (no vocals at all).
+    vocal = "" if instrumental else _owner_vocal(owner_type, owner_id)
     if vocal:
         segs = [s for s in (tags.split(", ") if tags else []) if s and not _is_vocal_directive(s)]
         segs.append(f"{vocal} vocal")
         tags = ", ".join(segs)
 
-    lyrics = t["lyrics"] or ""
-    if str(settings.get("lyrics_strip_parentheticals", "1")) in ("1", "true", "True", "on"):
-        lyrics = _strip_lyric_directives(lyrics)
+    if instrumental:
+        lyrics = "[Instrumental]"   # acestep.cpp marker for no vocals
+    else:
+        lyrics = t["lyrics"] or ""
+        if str(settings.get("lyrics_strip_parentheticals", "1")) in ("1", "true", "True", "on"):
+            lyrics = _strip_lyric_directives(lyrics)
     duration = t["duration"] or 180
 
     try:

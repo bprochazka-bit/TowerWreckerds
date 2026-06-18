@@ -18,6 +18,7 @@
   {% if track.role %}<span class="mono muted">{{ track.role }}</span>{% endif %}
   {% if release %}<span class="mono muted">track {{ '%02d'|format(track.position) }}</span>{% endif %}
   <span class="mono muted">{{ track.source }}</span>
+  {% if track.instrumental %}<span class="pill briefed">instrumental</span>{% endif %}
   {% if track.reference_audio %}<span class="mono muted">cover of {{ track.reference_audio }}</span>{% endif %}
 </div>
 
@@ -92,7 +93,11 @@
     (and the direction) then <strong>Regenerate lyrics</strong> to rewrite only the
     lyrics — tempo, key, and tags are left as-is. Global style lives in Admin.</p>
   <form method="post" action="{{ url_for('tracks.save_source', track_id=track.id) }}">
-    <label>Subject</label>
+    <label class="check">
+      <input type="checkbox" name="instrumental" {{ 'checked' if track.instrumental }}>
+      <span>Instrumental — render with no vocals (lyrics are ignored)</span>
+    </label>
+    <label style="margin-top:12px">Subject</label>
     <input type="text" name="subject" value="{{ track.subject or '' }}">
     <label style="margin-top:10px">Summary</label>
     <textarea name="summary" rows="3">{{ track.summary or '' }}</textarea>
@@ -106,6 +111,32 @@
         {% if track.lyrics %}onsubmit="return confirm('Regenerate lyrics? This replaces the current lyrics.')"{% endif %}>
     <button class="btn" type="submit">Regenerate lyrics</button>
   </form>
+</div>
+
+<div class="panel" style="margin-top:16px">
+  <div class="strip-label">Cover reference</div>
+  <p class="muted" style="font-size:12px">Attach a song from the reference-music
+    repository to render this track as an <strong>audio2audio cover</strong> of it.
+    Cover strength lives in Admin.</p>
+  {% if not ref_path %}
+    <p class="muted">No reference-music repository configured. Set one in
+      <a href="{{ url_for('admin.admin_home') }}">Admin</a>.</p>
+  {% elif not references and not track.reference_audio %}
+    <p class="muted">No audio files found under <span class="mono">{{ ref_path }}</span>.</p>
+  {% else %}
+  <form method="post" action="{{ url_for('tracks.set_reference', track_id=track.id) }}">
+    <select name="reference">
+      <option value="">— none (not a cover) —</option>
+      {% for r in references %}
+      <option value="{{ r.rel }}" {{ 'selected' if r.rel == track.reference_audio }}>{{ r.rel }}</option>
+      {% endfor %}
+      {% if track.reference_audio and track.reference_audio not in references|map(attribute='rel')|list %}
+      <option value="{{ track.reference_audio }}" selected>{{ track.reference_audio }} (missing from library)</option>
+      {% endif %}
+    </select>
+    <div class="btn-row"><button class="btn sm" type="submit">Save reference</button></div>
+  </form>
+  {% endif %}
 </div>
 
 <div class="panel" style="margin-top:16px">

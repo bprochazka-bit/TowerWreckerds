@@ -159,11 +159,14 @@ def detail(track_id):
     candidates = query(
         "SELECT * FROM candidate WHERE track_id=? ORDER BY integrity DESC, id", (track_id,))
     tag_options = [r["name"] for r in query("SELECT name FROM style_tag ORDER BY name")]
+    references = generation.list_reference_music()
+    ref_path = generation.all_settings().get("reference_music_path", "")
     return render_template("tracks/detail.html", track=track, release=release,
                            candidates=candidates,
                            style_tags=jload(track["style_tags"]),
                            environmentals=jload(track["environmentals"]),
-                           tag_options=tag_options)
+                           tag_options=tag_options, references=references,
+                           ref_path=ref_path)
 
 
 @bp.route("/<int:track_id>/lyrics", methods=["POST"])
@@ -180,11 +183,25 @@ def save_lyrics(track_id):
 def save_source(track_id):
     if not query("SELECT 1 FROM track WHERE id=?", (track_id,), one=True):
         return redirect(url_for("tracks.library"))
-    execute("UPDATE track SET subject=?, summary=?, lyric_notes=? WHERE id=?",
+    execute("UPDATE track SET subject=?, summary=?, lyric_notes=?, instrumental=? WHERE id=?",
             (request.form.get("subject", "").strip(),
              request.form.get("summary", "").strip(),
-             request.form.get("lyric_notes", "").strip(), track_id))
+             request.form.get("lyric_notes", "").strip(),
+             1 if request.form.get("instrumental") else 0, track_id))
     flash("Lyric source saved.", "ok")
+    return redirect(url_for("tracks.detail", track_id=track_id))
+
+
+@bp.route("/<int:track_id>/reference", methods=["POST"])
+def set_reference(track_id):
+    """Attach (or clear) a reference recording so the track renders as an
+    audio2audio cover."""
+    if not query("SELECT 1 FROM track WHERE id=?", (track_id,), one=True):
+        return redirect(url_for("tracks.library"))
+    ref = request.form.get("reference", "").strip()
+    execute("UPDATE track SET reference_audio=? WHERE id=?", (ref or None, track_id))
+    flash("Cover reference set — renders as an audio2audio cover."
+          if ref else "Cover reference cleared.", "ok")
     return redirect(url_for("tracks.detail", track_id=track_id))
 
 
