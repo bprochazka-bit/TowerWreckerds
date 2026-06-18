@@ -59,4 +59,33 @@
     <div class="btn-row"><button class="btn primary" type="submit">Generate concept + tracklist</button></div>
   </form>
 </div>
+
+<div class="panel" style="margin-top:16px">
+  <div class="strip-label">Compose manually</div>
+  <p class="muted" style="font-size:12px">Start an empty release and assemble it
+    yourself from tracks you write individually — add, reorder, and lock tracks
+    on the release page.</p>
+  <form method="post" action="{{ url_for('albums.create_empty') }}">
+    <label>Performer</label>
+    <select name="owner" required>
+      <option value="">— choose a band or artist —</option>
+      {% if bands %}<optgroup label="Bands">
+        {% for b in bands %}<option value="band:{{ b.id }}">{{ b.name }}</option>{% endfor %}
+      </optgroup>{% endif %}
+      {% if artists %}<optgroup label="Solo artists">
+        {% for a in artists %}<option value="artist:{{ a.id }}">{{ a.name }}</option>{% endfor %}
+      </optgroup>{% endif %}
+    </select>
+    <div class="field-row" style="margin-top:10px">
+      <div><label>Title</label><input type="text" name="title" placeholder="Untitled"></div>
+      <div><label>Type</label>
+        <select name="type">
+          <option value="album">album</option>
+          <option value="ep">EP</option>
+          <option value="single">single</option>
+        </select></div>
+    </div>
+    <div class="btn-row"><button class="btn" type="submit">Create empty release</button></div>
+  </form>
+</div>
 {% endblock %}

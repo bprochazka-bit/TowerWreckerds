@@ -355,14 +355,15 @@ _TRACK_KEYS_DOC = """     position (int, 1-based),
      length_seconds (int, 90-300)."""
 
 
-def _insert_tracklist(rid, tracks):
-    for t in tracks:
+def _insert_tracklist(rid, tracks, position_from=None):
+    for i, t in enumerate(tracks):
         cues = t.get("style_cues", [])
+        pos = (position_from + i) if position_from is not None else t.get("position", 1)
         execute(
             "INSERT INTO track (release_id, position, role, title, subject, summary,"
             " style_tags, tempo, mood, duration, status, source, created_at)"
             " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (rid, t.get("position", 1), t.get("role", ""), t.get("title", "Untitled"),
+            (rid, pos, t.get("role", ""), t.get("title", "Untitled"),
              t.get("subject", ""), t.get("summary", ""), jdump(cues),
              t.get("tempo"), t.get("mood", ""), t.get("length_seconds", 180),
              "briefed", "album", now_iso()),
@@ -421,24 +422,38 @@ Sequence the roles sensibly (opener first, closer last).
 
 def regenerate_tracklist(album_id):
     """Rebuild a release's tracklist from its current title/concept/inspiration/
-    ethos/genre/tags (e.g. after editing the inspiration). Replaces all existing
-    tracks. Returns the album_id."""
+    ethos/genre/tags (e.g. after editing the inspiration). Locked tracks are kept
+    untouched; only unlocked tracks are replaced, and the model is asked to
+    generate complementary tracks to fill out the album. Returns the album_id."""
     rel = query("SELECT * FROM release WHERE id = ?", (album_id,), one=True)
     if not rel:
         raise ValueError("album not found")
     llm = LLMClient()
     ctx, genre = _owner_context(rel["owner_type"], rel["owner_id"])
     default_counts = {"album": 9, "ep": 5, "single": 1}
-    existing = query("SELECT COUNT(*) c FROM track WHERE release_id=?", (album_id,), one=True)["c"]
-    n = existing or default_counts.get(rel["type"], 9)
-    tags = jload(rel["style_tags"], [])
-    tag_str = ", ".join(tags) if tags else "(none specified)"
-    system = (
-        "You are an A&R producer rebuilding the tracklist for an existing release, "
-        "keeping its title, concept, and inspiration intact while giving it a fresh, "
-        "coherent sequence with a real emotional arc."
-    )
-    user = f"""Rebuild the tracklist for this {rel['type']}:
+    locked = query(
+        "SELECT * FROM track WHERE release_id=? AND locked=1 ORDER BY position",
+        (album_id,))
+    total = query("SELECT COUNT(*) c FROM track WHERE release_id=?", (album_id,), one=True)["c"]
+    target = total or default_counts.get(rel["type"], 9)
+    n_new = max(0, target - len(locked))
+
+    if n_new:
+        tags = jload(rel["style_tags"], [])
+        tag_str = ", ".join(tags) if tags else "(none specified)"
+        locked_block = ""
+        if locked:
+            lines = "\n".join(
+                f"- {t['title']} ({t['role'] or 'track'}): {t['subject'] or ''}"
+                for t in locked)
+            locked_block = (f"\nThese tracks are FIXED — keep them, do not repeat or "
+                            f"duplicate them; write new tracks that complement them:\n{lines}\n")
+        system = (
+            "You are an A&R producer rebuilding the tracklist for an existing release, "
+            "keeping its title, concept, and inspiration intact while giving it a fresh, "
+            "coherent sequence with a real emotional arc."
+        )
+        user = f"""Rebuild the tracklist for this {rel['type']}:
 {ctx}
 
 Title: {rel['title']}
@@ -447,17 +462,58 @@ Inspiration: {rel['inspiration'] or '(none)'}
 Ethos: {rel['ethos'] or '(none)'}
 Style tags: {tag_str}
 Primary genre: {genre}
-
+{locked_block}
 Return JSON with key:
-  tracks: array of exactly {n} objects, each with keys:
+  tracks: array of exactly {n_new} objects, each with keys:
 {_TRACK_KEYS_DOC}
-Sequence the roles sensibly (opener first, closer last).
+Sequence the roles sensibly.
 """
-    data = llm.generate_json(user, system=system)
-    execute("DELETE FROM track WHERE release_id = ?", (album_id,))
-    _insert_tracklist(album_id, data.get("tracks", []))
+        data = llm.generate_json(user, system=system)
+        new_tracks = (data.get("tracks", []) or [])[:n_new]  # never exceed the target
+    else:
+        new_tracks = []
+
+    # Replace only the unlocked tracks; append the new ones after the locked ones.
+    execute("DELETE FROM track WHERE release_id=? AND COALESCE(locked,0)=0", (album_id,))
+    maxpos = max((t["position"] or 0 for t in locked), default=0)
+    _insert_tracklist(album_id, new_tracks, position_from=maxpos + 1)
     execute("UPDATE release SET status='tracklist' WHERE id=?", (album_id,))
     return album_id
+
+
+def renumber_tracks(album_id):
+    """Renumber a release's tracks to 1..N by current (position, id) order."""
+    rows = query("SELECT id FROM track WHERE release_id=? ORDER BY position, id", (album_id,))
+    for i, r in enumerate(rows, start=1):
+        execute("UPDATE track SET position=? WHERE id=?", (i, r["id"]))
+
+
+def add_track_to_album(album_id, track_id):
+    """Attach a standalone track to an album at the end of the tracklist."""
+    rel = query("SELECT 1 FROM release WHERE id=?", (album_id,), one=True)
+    t = query("SELECT release_id FROM track WHERE id=?", (track_id,), one=True)
+    if not rel or not t:
+        raise ValueError("album or track not found")
+    if t["release_id"]:
+        raise ValueError("track already belongs to a release")
+    maxpos = query("SELECT MAX(position) m FROM track WHERE release_id=?", (album_id,), one=True)["m"] or 0
+    execute("UPDATE track SET release_id=?, position=? WHERE id=?",
+            (album_id, maxpos + 1, track_id))
+    return track_id
+
+
+def move_track(album_id, track_id, direction):
+    """Move a track up/down within its album, then renumber 1..N."""
+    rows = query("SELECT id FROM track WHERE release_id=? ORDER BY position, id", (album_id,))
+    ids = [r["id"] for r in rows]
+    if track_id not in ids:
+        return
+    i = ids.index(track_id)
+    j = i - 1 if direction == "up" else i + 1
+    if 0 <= j < len(ids):
+        ids[i], ids[j] = ids[j], ids[i]
+    for pos, tid in enumerate(ids, start=1):
+        execute("UPDATE track SET position=? WHERE id=?", (pos, tid))
 
 
 # ---------------------------------------------------------------------------

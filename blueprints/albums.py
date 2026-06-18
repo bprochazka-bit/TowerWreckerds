@@ -4,7 +4,7 @@ from flask import (
     Blueprint, flash, redirect, render_template, request, url_for,
 )
 
-from database import execute, jload, query
+from database import execute, jload, now_iso, query
 from backends.llm import LLMError
 from backends.imagegen import ImageGenError
 import generation
@@ -88,6 +88,62 @@ def regenerate_tracklist(album_id):
     return redirect(url_for("albums.detail", album_id=album_id))
 
 
+@bp.route("/create-empty", methods=["POST"])
+def create_empty():
+    owner = request.form.get("owner", "")
+    if ":" not in owner:
+        flash("Choose a performer for the release.", "error")
+        return redirect(url_for("albums.new_album"))
+    owner_type, owner_id = owner.split(":", 1)
+    rtype = request.form.get("type", "album")
+    if rtype not in ("single", "ep", "album"):
+        rtype = "album"
+    title = request.form.get("title", "").strip() or "Untitled"
+    rid = execute(
+        "INSERT INTO release (owner_type, owner_id, type, title, status, created_at)"
+        " VALUES (?,?,?,?,?,?)",
+        (owner_type, int(owner_id), rtype, title, "tracklist", now_iso()))
+    flash("Empty release created — add tracks to compose it.", "ok")
+    return redirect(url_for("albums.detail", album_id=rid))
+
+
+@bp.route("/<int:album_id>/add-track", methods=["POST"])
+def add_track(album_id):
+    try:
+        generation.add_track_to_album(album_id, int(request.form.get("track_id", "0")))
+    except (ValueError, TypeError) as exc:
+        flash(f"Could not add track: {exc}", "error")
+    else:
+        flash("Track added to the release.", "ok")
+    return redirect(url_for("albums.detail", album_id=album_id))
+
+
+@bp.route("/<int:album_id>/move/<int:track_id>", methods=["POST"])
+def move(album_id, track_id):
+    generation.move_track(album_id, track_id, request.form.get("dir", "up"))
+    return redirect(url_for("albums.detail", album_id=album_id))
+
+
+@bp.route("/<int:album_id>/track/<int:track_id>/lock", methods=["POST"])
+def toggle_lock(album_id, track_id):
+    t = query("SELECT locked FROM track WHERE id=? AND release_id=?",
+              (track_id, album_id), one=True)
+    if t is not None:
+        cur = t["locked"] if "locked" in t.keys() else 0
+        execute("UPDATE track SET locked=? WHERE id=?", (0 if cur else 1, track_id))
+    return redirect(url_for("albums.detail", album_id=album_id))
+
+
+@bp.route("/<int:album_id>/remove/<int:track_id>", methods=["POST"])
+def remove_track(album_id, track_id):
+    """Detach a track from the album — it becomes a standalone track again."""
+    execute("UPDATE track SET release_id=NULL WHERE id=? AND release_id=?",
+            (track_id, album_id))
+    generation.renumber_tracks(album_id)
+    flash("Track removed from the release (kept as a standalone track).", "ok")
+    return redirect(url_for("albums.detail", album_id=album_id))
+
+
 @bp.route("/<int:album_id>")
 def detail(album_id):
     album = query("SELECT * FROM release WHERE id = ?", (album_id,), one=True)
@@ -97,9 +153,12 @@ def detail(album_id):
     owner_name = _owner_name(album["owner_type"], album["owner_id"])
     cover_prompt = (album["cover_prompt"] if "cover_prompt" in album.keys() else None) \
         or generation.build_album_cover_prompt(album_id)
+    # Standalone tracks that can be pulled into this release.
+    addable = query("SELECT id, title FROM track WHERE release_id IS NULL ORDER BY id DESC")
     return render_template("albums/detail.html", album=album, tracks=tracks,
                            owner_name=owner_name, style_tags=jload(album["style_tags"]),
-                           cover_prompt=cover_prompt, job=jobs.get_job(album_id))
+                           cover_prompt=cover_prompt, job=jobs.get_job(album_id),
+                           addable=addable)
 
 
 def _job_fragment(album_id, job):

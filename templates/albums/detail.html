@@ -65,6 +65,18 @@
 <div class="panel" style="margin-top:16px">
   <div class="strip-label">Tracklist · {{ tracks|length }} tracks</div>
   {% include 'albums/_job_progress.html' %}
+
+  {% if addable %}
+  <form method="post" action="{{ url_for('albums.add_track', album_id=album.id) }}"
+        class="tag-add" style="margin-bottom:14px">
+    <select name="track_id" required>
+      <option value="">— add an existing standalone track —</option>
+      {% for a in addable %}<option value="{{ a.id }}">{{ a.title }}</option>{% endfor %}
+    </select>
+    <button class="btn sm" type="submit">Add</button>
+  </form>
+  {% endif %}
+
   {% if tracks %}
   <div class="btn-row" style="margin-bottom:14px">
     <form method="post" action="{{ url_for('albums.brief_all', album_id=album.id) }}"
@@ -79,14 +91,14 @@
     </form>
     <form method="post" action="{{ url_for('albums.regenerate_tracklist', album_id=album.id) }}"
           class="gen-form" data-working="Rebuilding the tracklist"
-          onsubmit="return confirm('Regenerate the tracklist? This deletes the current tracks (and any lyrics/audio) and builds a new sequence from the inspiration.')">
+          onsubmit="return confirm('Regenerate the tracklist? Locked (pinned) tracks are kept; all other tracks are replaced (their lyrics/audio are lost).')">
       <button class="btn sm ghost" type="submit">Regenerate tracklist</button>
     </form>
   </div>
   <div class="tracklist">
     {% for t in tracks %}
-    <div class="trk">
-      <div class="pos">{{ '%02d'|format(t.position) }}</div>
+    <div class="trk{{ ' locked' if t.locked }}">
+      <div class="pos">{{ '%02d'|format(t.position) }}{% if t.locked %}<br><span title="locked">🔒</span>{% endif %}</div>
       <div>
         <div class="role">{{ t.role or 'track' }}</div>
         <div class="tname"><a href="{{ url_for('tracks.detail', track_id=t.id) }}">{{ t.title }}</a></div>
@@ -101,12 +113,23 @@
         </div>
       </div>
       <div class="right">
-        <span class="pill {{ t.status }}">{{ t.status }}</span><br>
-        <a class="btn sm ghost" style="margin-top:8px" href="{{ url_for('tracks.detail', track_id=t.id) }}">Open →</a>
+        <span class="pill {{ t.status }}">{{ t.status }}</span>
+        <div class="trk-ctl">
+          <form method="post" action="{{ url_for('albums.move', album_id=album.id, track_id=t.id) }}">
+            <input type="hidden" name="dir" value="up"><button class="btn sm ghost" type="submit" title="move up">↑</button></form>
+          <form method="post" action="{{ url_for('albums.move', album_id=album.id, track_id=t.id) }}">
+            <input type="hidden" name="dir" value="down"><button class="btn sm ghost" type="submit" title="move down">↓</button></form>
+          <form method="post" action="{{ url_for('albums.toggle_lock', album_id=album.id, track_id=t.id) }}">
+            <button class="btn sm ghost" type="submit" title="{{ 'unlock' if t.locked else 'lock (pin against regeneration)' }}">{{ '🔓' if t.locked else '🔒' }}</button></form>
+          <form method="post" action="{{ url_for('albums.remove_track', album_id=album.id, track_id=t.id) }}"
+                onsubmit="return confirm('Remove from this release? The track is kept as a standalone track.')">
+            <button class="btn sm ghost" type="submit" title="remove from release">✕</button></form>
+        </div>
+        <a class="btn sm ghost" href="{{ url_for('tracks.detail', track_id=t.id) }}">Open →</a>
       </div>
     </div>
     {% endfor %}
   </div>
-  {% else %}<p class="muted">No tracks.</p>{% endif %}
+  {% else %}<p class="muted">No tracks yet — add standalone tracks above to compose this release.</p>{% endif %}
 </div>
 {% endblock %}
