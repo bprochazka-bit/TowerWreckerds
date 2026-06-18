@@ -228,7 +228,7 @@ performer's voice.
 
 When the cover is rendered, the reference recording is sent to ACE-Step as the
 source for a real **audio2audio cover** (acestep.cpp `task_type="cover"`): the
-source audio is uploaded as the multipart `src_audio` part so the render
+source audio is uploaded as the multipart `audio` part so the render
 follows the original's structure, recast in the new style. Two Admin controls
 steer it: **Cover strength** (`acestep_cover_strength` → `audio_cover_strength`,
 the fraction of diffusion steps that see the source) and **Cover noise**

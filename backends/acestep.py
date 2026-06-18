@@ -78,7 +78,7 @@ class ACEStepClient:
 
         When `reference_audio` (a local file path) is given, this renders a
         *cover* (audio2audio): task_type="cover", with the source audio sent as
-        the multipart `src_audio` part. `cover_strength` maps to
+        the multipart `audio` part. `cover_strength` maps to
         audio_cover_strength (fraction of DiT steps that see the source) and
         `cover_noise` to cover_noise_strength.
         """
@@ -122,12 +122,14 @@ class ACEStepClient:
         """POST /synth and resolve the result to audio bytes, transparently
         handling both the async (job-id) build and any sync build that returns
         audio inline. When `src_audio` (name, bytes) is supplied, the request is
-        sent as multipart with a `request` JSON part and a `src_audio` part
-        (acestep.cpp's cover/audio2audio contract)."""
+        sent as multipart with a `request` JSON part and an `audio` part — the
+        source-audio field ace-server.cpp reads for cover/audio2audio (validated
+        against tools/ace-server.cpp: has_file("audio"))."""
         if src_audio is not None:
             files = {
-                "request": (None, json.dumps(req), "application/json"),
-                "src_audio": (src_audio[0], src_audio[1], "application/octet-stream"),
+                "request": ("request.json", json.dumps(req), "application/json"),
+                "audio": (src_audio[0] or "source.wav", src_audio[1],
+                          "application/octet-stream"),
             }
             r = self._post_multipart("/synth", files, timeout)
         else:
