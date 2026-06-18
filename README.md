@@ -26,8 +26,11 @@ The app has four authoring sections plus an admin console.
    artists that already exist.
 3. **Albums** — seed a release with a band or a solo artist, give it an ethos
    and style tags, and the model returns a titled concept plus a full
-   tracklist. Every track comes with a role, subject, summary, tempo, mood,
-   length, and stylistic cues. Album-wide buttons **write briefs for all
+   tracklist. You can give the release a **title** (or mark it **self-titled**
+   to use the performer's name), and afterwards **edit the title, inspiration,
+   and ethos** and hit **Regenerate tracklist** to rebuild the sequence from the
+   edited inspiration. Every track comes with a role, subject, summary, tempo,
+   mood, length, and stylistic cues. Album-wide buttons **write briefs for all
    tracks**, **render audio for all tracks**, and **publish** the album — each
    runs in the background with a live, cancellable progress bar showing every
    track (and, for renders, each candidate) as it completes.

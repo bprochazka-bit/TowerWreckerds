@@ -339,27 +339,7 @@ def _strip_lyric_directives(lyrics):
     return text.strip()
 
 
-def generate_album(owner_type, owner_id, ethos, style_tags, rel_type="album", track_count=None):
-    llm = LLMClient()
-    ctx, genre = _owner_context(owner_type, owner_id)
-    default_counts = {"album": 9, "ep": 5, "single": 1}
-    n = int(track_count or default_counts.get(rel_type, 9))
-    tag_str = ", ".join(style_tags) if style_tags else "(none specified)"
-    system = (
-        "You are an A&R producer shaping a cohesive release. Build a tracklist with "
-        "a real emotional arc, not a random list. Each track has a clear job."
-    )
-    user = f"""Design a {rel_type} for:
-{ctx}
-
-Ethos / concept brief from the user: {ethos or "(none given — derive from the artist)"}
-Requested style tags: {tag_str}
-Primary genre: {genre}
-
-Return JSON with keys:
-  title, concept, inspiration,
-  tracks: array of exactly {n} objects, each with keys:
-     position (int, 1-based),
+_TRACK_KEYS_DOC = """     position (int, 1-based),
      title,
      role (one of: opener, single, ballad, experimental, interlude, closer),
      subject (what the song is about),
@@ -367,18 +347,11 @@ Return JSON with keys:
      style_cues (array of short production/style descriptors),
      tempo (bpm int),
      mood,
-     length_seconds (int, 90-300).
-Sequence the roles sensibly (opener first, closer last).
-"""
-    data = llm.generate_json(user, system=system)
-    rid = execute(
-        "INSERT INTO release (owner_type, owner_id, type, title, concept, inspiration,"
-        " ethos, style_tags, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (owner_type, owner_id, rel_type, data.get("title", "Untitled"),
-         data.get("concept", ""), data.get("inspiration", ""), ethos or "",
-         jdump(style_tags), "tracklist", now_iso()),
-    )
-    for t in data.get("tracks", []):
+     length_seconds (int, 90-300)."""
+
+
+def _insert_tracklist(rid, tracks):
+    for t in tracks:
         cues = t.get("style_cues", [])
         execute(
             "INSERT INTO track (release_id, position, role, title, subject, summary,"
@@ -389,7 +362,97 @@ Sequence the roles sensibly (opener first, closer last).
              t.get("tempo"), t.get("mood", ""), t.get("length_seconds", 180),
              "briefed", "album", now_iso()),
         )
+
+
+def generate_album(owner_type, owner_id, ethos, style_tags, rel_type="album",
+                   track_count=None, title=None, self_titled=False):
+    llm = LLMClient()
+    ctx, genre = _owner_context(owner_type, owner_id)
+    owner_name, _ = _owner_name_genre(owner_type, owner_id)
+    default_counts = {"album": 9, "ep": 5, "single": 1}
+    n = int(track_count or default_counts.get(rel_type, 9))
+    tag_str = ", ".join(style_tags) if style_tags else "(none specified)"
+
+    # A fixed title (explicit or self-titled) is told to the model and overrides
+    # whatever it returns.
+    fixed_title = owner_name if self_titled else (title or "").strip()
+    if self_titled:
+        title_line = f'This is a SELF-TITLED release; its title is "{owner_name}".'
+    elif fixed_title:
+        title_line = f'The release title is fixed: "{fixed_title}".'
+    else:
+        title_line = "Invent a fitting title."
+
+    system = (
+        "You are an A&R producer shaping a cohesive release. Build a tracklist with "
+        "a real emotional arc, not a random list. Each track has a clear job."
+    )
+    user = f"""Design a {rel_type} for:
+{ctx}
+
+Ethos / concept brief from the user: {ethos or "(none given — derive from the artist)"}
+Requested style tags: {tag_str}
+Primary genre: {genre}
+{title_line}
+
+Return JSON with keys:
+  title, concept, inspiration,
+  tracks: array of exactly {n} objects, each with keys:
+{_TRACK_KEYS_DOC}
+Sequence the roles sensibly (opener first, closer last).
+"""
+    data = llm.generate_json(user, system=system)
+    final_title = fixed_title or data.get("title", "Untitled")
+    rid = execute(
+        "INSERT INTO release (owner_type, owner_id, type, title, concept, inspiration,"
+        " ethos, style_tags, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (owner_type, owner_id, rel_type, final_title,
+         data.get("concept", ""), data.get("inspiration", ""), ethos or "",
+         jdump(style_tags), "tracklist", now_iso()),
+    )
+    _insert_tracklist(rid, data.get("tracks", []))
     return rid
+
+
+def regenerate_tracklist(album_id):
+    """Rebuild a release's tracklist from its current title/concept/inspiration/
+    ethos/genre/tags (e.g. after editing the inspiration). Replaces all existing
+    tracks. Returns the album_id."""
+    rel = query("SELECT * FROM release WHERE id = ?", (album_id,), one=True)
+    if not rel:
+        raise ValueError("album not found")
+    llm = LLMClient()
+    ctx, genre = _owner_context(rel["owner_type"], rel["owner_id"])
+    default_counts = {"album": 9, "ep": 5, "single": 1}
+    existing = query("SELECT COUNT(*) c FROM track WHERE release_id=?", (album_id,), one=True)["c"]
+    n = existing or default_counts.get(rel["type"], 9)
+    tags = jload(rel["style_tags"], [])
+    tag_str = ", ".join(tags) if tags else "(none specified)"
+    system = (
+        "You are an A&R producer rebuilding the tracklist for an existing release, "
+        "keeping its title, concept, and inspiration intact while giving it a fresh, "
+        "coherent sequence with a real emotional arc."
+    )
+    user = f"""Rebuild the tracklist for this {rel['type']}:
+{ctx}
+
+Title: {rel['title']}
+Concept: {rel['concept'] or '(none)'}
+Inspiration: {rel['inspiration'] or '(none)'}
+Ethos: {rel['ethos'] or '(none)'}
+Style tags: {tag_str}
+Primary genre: {genre}
+
+Return JSON with key:
+  tracks: array of exactly {n} objects, each with keys:
+{_TRACK_KEYS_DOC}
+Sequence the roles sensibly (opener first, closer last).
+"""
+    data = llm.generate_json(user, system=system)
+    execute("DELETE FROM track WHERE release_id = ?", (album_id,))
+    _insert_tracklist(album_id, data.get("tracks", []))
+    execute("UPDATE release SET status='tracklist' WHERE id=?", (album_id,))
+    return album_id
 
 
 # ---------------------------------------------------------------------------

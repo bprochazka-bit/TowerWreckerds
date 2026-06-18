@@ -36,7 +36,14 @@
       <div></div>
     </div>
 
-    <label>Ethos / concept</label>
+    <label>Title <span class="muted">(optional — blank lets the model name it)</span></label>
+    <input type="text" name="title" placeholder="leave blank to auto-generate">
+    <label class="check" style="margin-top:10px">
+      <input type="checkbox" name="self_titled" value="1">
+      <span>Self-titled (use the performer's name as the title)</span>
+    </label>
+
+    <label style="margin-top:16px">Ethos / concept</label>
     <textarea name="ethos" placeholder="The thread that ties the record together — themes, narrative arc, what the artist is reaching for."></textarea>
 
     <div class="strip-label" style="margin-top:22px">Style tags</div>

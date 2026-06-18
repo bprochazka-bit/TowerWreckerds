@@ -55,12 +55,37 @@ def generate():
             request.form.get("ethos", ""), style_tags,
             rel_type=request.form.get("type", "album"),
             track_count=request.form.get("track_count") or None,
+            title=request.form.get("title", ""),
+            self_titled=bool(request.form.get("self_titled")),
         )
     except LLMError as exc:
         flash(f"Generation failed: {exc}", "error")
         return redirect(url_for("albums.new_album"))
     flash("Album concept and tracklist generated.", "ok")
     return redirect(url_for("albums.detail", album_id=rid))
+
+
+@bp.route("/<int:album_id>/details", methods=["POST"])
+def update_details(album_id):
+    if not query("SELECT 1 FROM release WHERE id=?", (album_id,), one=True):
+        return redirect(url_for("albums.list_albums"))
+    title = request.form.get("title", "").strip()
+    execute("UPDATE release SET title=?, inspiration=?, ethos=? WHERE id=?",
+            (title or "Untitled", request.form.get("inspiration", "").strip(),
+             request.form.get("ethos", "").strip(), album_id))
+    flash("Album details saved.", "ok")
+    return redirect(url_for("albums.detail", album_id=album_id))
+
+
+@bp.route("/<int:album_id>/regenerate-tracklist", methods=["POST"])
+def regenerate_tracklist(album_id):
+    try:
+        generation.regenerate_tracklist(album_id)
+    except (LLMError, ValueError) as exc:
+        flash(f"Regeneration failed: {exc}", "error")
+        return redirect(url_for("albums.detail", album_id=album_id))
+    flash("Tracklist regenerated.", "ok")
+    return redirect(url_for("albums.detail", album_id=album_id))
 
 
 @bp.route("/<int:album_id>")

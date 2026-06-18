@@ -20,18 +20,20 @@
   </div>
 </div>
 
-<div class="grid cols-2">
-  <div class="panel">
-    <div class="strip-label">Inspiration</div>
-    <p>{{ album.inspiration or '—' }}</p>
-  </div>
-  <div class="panel">
-    <div class="strip-label">Ethos & tags</div>
-    {% if album.ethos %}<p style="font-size:13.5px">{{ album.ethos }}</p>{% endif %}
-    {% if style_tags %}<div class="chips">
-      {% for t in style_tags %}<span class="chip teal">{{ t }}</span>{% endfor %}
-    </div>{% endif %}
-  </div>
+<div class="panel">
+  <div class="strip-label">Details</div>
+  <form method="post" action="{{ url_for('albums.update_details', album_id=album.id) }}">
+    <label>Title</label>
+    <input type="text" name="title" value="{{ album.title or '' }}">
+    <label style="margin-top:12px">Inspiration</label>
+    <textarea name="inspiration" rows="3">{{ album.inspiration or '' }}</textarea>
+    <label style="margin-top:12px">Ethos / concept brief</label>
+    <textarea name="ethos" rows="3">{{ album.ethos or '' }}</textarea>
+    <div class="btn-row"><button class="btn sm" type="submit">Save details</button></div>
+  </form>
+  {% if style_tags %}<div class="chips" style="margin-top:12px">
+    {% for t in style_tags %}<span class="chip teal">{{ t }}</span>{% endfor %}
+  </div>{% endif %}
 </div>
 
 <div class="panel" style="margin-top:16px">
@@ -74,6 +76,11 @@
           hx-post="{{ url_for('albums.render_all', album_id=album.id) }}"
           hx-target="#job-progress" hx-swap="outerHTML">
       <button class="btn sm primary" type="submit">Render audio — all tracks</button>
+    </form>
+    <form method="post" action="{{ url_for('albums.regenerate_tracklist', album_id=album.id) }}"
+          class="gen-form" data-working="Rebuilding the tracklist"
+          onsubmit="return confirm('Regenerate the tracklist? This deletes the current tracks (and any lyrics/audio) and builds a new sequence from the inspiration.')">
+      <button class="btn sm ghost" type="submit">Regenerate tracklist</button>
     </form>
   </div>
   <div class="tracklist">
