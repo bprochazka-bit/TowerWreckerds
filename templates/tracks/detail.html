@@ -49,9 +49,20 @@
     <datalist id="tag-options">
       {% for o in tag_options %}<option value="{{ o }}">{% endfor %}
     </datalist>
-    {% if environmentals %}<div class="chips" style="margin-top:8px">
-      {% for e in environmentals %}<span class="chip teal">{{ e }}</span>{% endfor %}
-    </div>{% endif %}
+    <div class="strip-label" style="margin-top:14px">Environment / space</div>
+    <div class="chips chips-edit">
+      {% for e in environmentals %}
+      <span class="chip teal">{{ e }}<form method="post" style="display:inline"
+            action="{{ url_for('tracks.remove_env', track_id=track.id) }}">
+        <input type="hidden" name="env" value="{{ e }}">
+        <button class="chip-x" type="submit" title="remove">×</button>
+      </form></span>
+      {% else %}<span class="muted" style="font-size:12px">none</span>{% endfor %}
+    </div>
+    <form method="post" action="{{ url_for('tracks.add_env', track_id=track.id) }}" class="tag-add">
+      <input type="text" name="env" placeholder="add an environment cue (e.g. room reverb, tape hiss)" autocomplete="off">
+      <button class="btn sm" type="submit">Add</button>
+    </form>
   </div>
 
   <div class="panel">

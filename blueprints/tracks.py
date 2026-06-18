@@ -173,6 +173,32 @@ def remove_tag(track_id):
     return redirect(url_for("tracks.detail", track_id=track_id))
 
 
+@bp.route("/<int:track_id>/env/add", methods=["POST"])
+def add_env(track_id):
+    t = query("SELECT environmentals FROM track WHERE id=?", (track_id,), one=True)
+    if not t:
+        return redirect(url_for("tracks.library"))
+    item = request.form.get("env", "").strip()
+    items = jload(t["environmentals"], [])
+    if item and item.lower() not in [x.lower() for x in items]:
+        items.append(item)
+        execute("UPDATE track SET environmentals=? WHERE id=?", (jdump(items), track_id))
+        flash(f"Added environment cue '{item}'.", "ok")
+    return redirect(url_for("tracks.detail", track_id=track_id))
+
+
+@bp.route("/<int:track_id>/env/remove", methods=["POST"])
+def remove_env(track_id):
+    t = query("SELECT environmentals FROM track WHERE id=?", (track_id,), one=True)
+    if not t:
+        return redirect(url_for("tracks.library"))
+    item = request.form.get("env", "")
+    items = [x for x in jload(t["environmentals"], []) if x != item]
+    execute("UPDATE track SET environmentals=? WHERE id=?", (jdump(items), track_id))
+    flash(f"Removed environment cue '{item}'.", "ok")
+    return redirect(url_for("tracks.detail", track_id=track_id))
+
+
 @bp.route("/<int:track_id>/select/<int:candidate_id>", methods=["POST"])
 def select_candidate(track_id, candidate_id):
     cand = query("SELECT * FROM candidate WHERE id=? AND track_id=?",
