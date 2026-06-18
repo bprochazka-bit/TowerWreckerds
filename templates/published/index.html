@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Published · Music World{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <span class="eyebrow">05 · published</span>
+  <h1>Published works</h1>
+  <p class="sub">Everything exported to MP3. Download a single track, or open it to
+    re-publish or re-render.</p>
+</div></div>
+
+{% if groups %}
+  {% for g in groups %}
+  <div class="panel" style="margin-top:16px">
+    <div class="strip-label">
+      {% if g.rid %}{{ g.type }} · {{ g.album }}{% if g.owner %} — {{ g.owner }}{% endif %}
+      {% else %}Singles{% endif %}
+    </div>
+    <div style="display:flex; gap:16px; align-items:flex-start">
+      {% if g.cover_path %}
+        <img src="{{ g.cover_path|image_url }}" alt="cover"
+             style="width:96px;height:96px;border-radius:6px;object-fit:cover;flex:0 0 auto">
+      {% endif %}
+      <div class="members" style="flex:1">
+        {% for t in g.tracks %}
+        <div class="member">
+          {% if g.rid %}<span class="mono muted">{{ '%02d'|format(t.position) }}</span>{% endif %}
+          <a href="{{ url_for('tracks.detail', track_id=t.id) }}" style="flex:1">{{ t.title }}</a>
+          <a class="btn sm primary" href="{{ url_for('tracks.download', track_id=t.id) }}">Download</a>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+<div class="empty"><span class="eyebrow">empty channel</span>
+  Nothing published yet. Render a track, then <strong>Publish MP3</strong> on its
+  page (or publish a whole album).</div>
+{% endif %}
+{% endblock %}

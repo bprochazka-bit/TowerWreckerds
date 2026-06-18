@@ -11,6 +11,7 @@ from blueprints.artists import bp as artists_bp
 from blueprints.bands import bp as bands_bp
 from blueprints.albums import bp as albums_bp
 from blueprints.tracks import bp as tracks_bp
+from blueprints.published import bp as published_bp
 from blueprints.admin import bp as admin_bp
 
 
@@ -35,6 +36,7 @@ def create_app():
     app.register_blueprint(bands_bp)
     app.register_blueprint(albums_bp)
     app.register_blueprint(tracks_bp)
+    app.register_blueprint(published_bp)
     app.register_blueprint(admin_bp)
 
     # Make json-decoding available inside templates.

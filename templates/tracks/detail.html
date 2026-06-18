@@ -120,6 +120,7 @@
             action="{{ url_for('tracks.publish', track_id=track.id) }}">
         <button class="btn sm" type="submit">Publish MP3</button>
       </form>
+      <a class="btn sm primary" href="{{ url_for('tracks.download', track_id=track.id) }}">Download MP3</a>
     </div>
     {% if track.published_path %}<p class="muted mono" style="font-size:11px;margin-top:6px">
       published → {{ track.published_path }}</p>{% endif %}

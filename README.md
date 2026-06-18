@@ -286,6 +286,10 @@ the app tells you encoding was skipped, rather than failing the publish. Tag
 writing itself is pure stdlib, so it needs no extra packages. A missing album
 cover is generated automatically at publish time.
 
+A track page has a **Download MP3** button (it publishes the single track on
+demand if needed, then downloads it), and the **Published** section browses every
+exported track — grouped by album, with per-track download links.
+
 ## Taxonomy
 
 The Admin console also manages the **genre** and **style-tag** taxonomy the

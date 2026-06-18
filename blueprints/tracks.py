@@ -1,8 +1,10 @@
 """Tracks — briefed from an album row or written from a free-text prompt,
 then rendered to audio through ACE-Step with candidate selection."""
 
+import os
+
 from flask import (
-    Blueprint, flash, jsonify, redirect, render_template, request, url_for,
+    Blueprint, flash, jsonify, redirect, render_template, request, send_file, url_for,
 )
 
 from database import execute, jdump, jload, query
@@ -12,6 +14,8 @@ import generation
 from publish import publish_track, PublishError
 
 bp = Blueprint("tracks", __name__, url_prefix="/tracks")
+
+APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 @bp.route("/")
@@ -78,6 +82,31 @@ def cover():
         return redirect(url_for("tracks.new_cover"))
     flash("Cover brief written from the reference track.", "ok")
     return redirect(url_for("tracks.detail", track_id=tid))
+
+
+@bp.route("/<int:track_id>/download")
+def download(track_id):
+    """Download the track's MP3. Publishes the single track on demand if it
+    hasn't been published yet."""
+    t = query("SELECT title, audio_path, published_path FROM track WHERE id=?",
+              (track_id,), one=True)
+    if not t:
+        return redirect(url_for("tracks.library"))
+    if not t["audio_path"]:
+        flash("Render the track before downloading.", "error")
+        return redirect(url_for("tracks.detail", track_id=track_id))
+    path = t["published_path"]
+    abs_path = None
+    if path:
+        abs_path = path if os.path.isabs(path) else os.path.join(APP_ROOT, path)
+    if not abs_path or not os.path.exists(abs_path):
+        try:
+            abs_path = publish_track(track_id)["path"]
+        except PublishError as exc:
+            flash(f"Could not prepare the download: {exc}", "error")
+            return redirect(url_for("tracks.detail", track_id=track_id))
+    return send_file(abs_path, as_attachment=True,
+                     download_name=os.path.basename(abs_path))
 
 
 @bp.route("/<int:track_id>/publish", methods=["POST"])
