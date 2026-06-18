@@ -71,6 +71,17 @@ def detail(artist_id):
                            releases=releases, secondary=jload(artist["secondary_genres"]))
 
 
+@bp.route("/<int:artist_id>/rename", methods=["POST"])
+def rename(artist_id):
+    name = request.form.get("name", "").strip()
+    if name:
+        execute("UPDATE artist SET name=? WHERE id=?", (name, artist_id))
+        flash("Artist renamed.", "ok")
+    else:
+        flash("Name can't be empty.", "error")
+    return redirect(url_for("artists.detail", artist_id=artist_id))
+
+
 @bp.route("/<int:artist_id>/influences", methods=["POST"])
 def update_influences(artist_id):
     execute("UPDATE artist SET influences=? WHERE id=?",

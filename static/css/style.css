@@ -225,6 +225,8 @@ input:focus, textarea:focus, select:focus {
 .chip-x:hover { color: var(--red); }
 .tag-add { display: flex; gap: 8px; margin-top: 10px; }
 .tag-add input { flex: 1; }
+.rename-form { display: flex; gap: 8px; margin-top: 10px; max-width: 460px; }
+.rename-form input { flex: 1; }
 .lyrics-edit { font-family: var(--mono); font-size: 12.5px; line-height: 1.7;
   min-height: 320px; }
 

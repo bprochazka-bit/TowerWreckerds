@@ -82,6 +82,17 @@ def detail(band_id):
                            releases=releases)
 
 
+@bp.route("/<int:band_id>/rename", methods=["POST"])
+def rename(band_id):
+    name = request.form.get("name", "").strip()
+    if name:
+        execute("UPDATE band SET name=? WHERE id=?", (name, band_id))
+        flash("Band renamed.", "ok")
+    else:
+        flash("Name can't be empty.", "error")
+    return redirect(url_for("bands.detail", band_id=band_id))
+
+
 @bp.route("/<int:band_id>/influences", methods=["POST"])
 def update_influences(band_id):
     execute("UPDATE band SET influences=? WHERE id=?",

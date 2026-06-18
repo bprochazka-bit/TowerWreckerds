@@ -6,6 +6,10 @@
     <span class="eyebrow">02 · band · {{ band.status }}</span>
     <h1>{{ band.name }}</h1>
     <p class="sub">{{ band.primary_genre or '—' }}{% if band.formed_on %} · formed {{ band.formed_on }}{% endif %}</p>
+    <form class="rename-form" method="post" action="{{ url_for('bands.rename', band_id=band.id) }}">
+      <input type="text" name="name" value="{{ band.name }}" aria-label="Band name">
+      <button class="btn sm ghost" type="submit">Rename</button>
+    </form>
   </div>
   <form method="post" action="{{ url_for('bands.delete', band_id=band.id) }}"
         onsubmit="return confirm('Delete this band?')">

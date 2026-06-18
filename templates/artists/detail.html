@@ -6,6 +6,10 @@
     <span class="eyebrow">01 · profile · {{ artist.type }}</span>
     <h1>{{ artist.name }}</h1>
     <p class="sub">{{ artist.primary_genre or '—' }}{% if artist.region %} · {{ artist.region }}{% endif %}</p>
+    <form class="rename-form" method="post" action="{{ url_for('artists.rename', artist_id=artist.id) }}">
+      <input type="text" name="name" value="{{ artist.name }}" aria-label="Artist name">
+      <button class="btn sm ghost" type="submit">Rename</button>
+    </form>
   </div>
   <form method="post" action="{{ url_for('artists.delete', artist_id=artist.id) }}"
         onsubmit="return confirm('Delete this person?')">
