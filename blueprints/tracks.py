@@ -5,7 +5,7 @@ from flask import (
     Blueprint, flash, jsonify, redirect, render_template, request, url_for,
 )
 
-from database import execute, jload, query
+from database import execute, jdump, jload, query
 from backends.llm import LLMError
 from backends.acestep import ACEStepError
 import generation
@@ -129,10 +129,48 @@ def detail(track_id):
         release = query("SELECT * FROM release WHERE id = ?", (track["release_id"],), one=True)
     candidates = query(
         "SELECT * FROM candidate WHERE track_id=? ORDER BY integrity DESC, id", (track_id,))
+    tag_options = [r["name"] for r in query("SELECT name FROM style_tag ORDER BY name")]
     return render_template("tracks/detail.html", track=track, release=release,
                            candidates=candidates,
                            style_tags=jload(track["style_tags"]),
-                           environmentals=jload(track["environmentals"]))
+                           environmentals=jload(track["environmentals"]),
+                           tag_options=tag_options)
+
+
+@bp.route("/<int:track_id>/lyrics", methods=["POST"])
+def save_lyrics(track_id):
+    if not query("SELECT 1 FROM track WHERE id=?", (track_id,), one=True):
+        return redirect(url_for("tracks.library"))
+    execute("UPDATE track SET lyrics=? WHERE id=?",
+            (request.form.get("lyrics", ""), track_id))
+    flash("Lyrics saved.", "ok")
+    return redirect(url_for("tracks.detail", track_id=track_id))
+
+
+@bp.route("/<int:track_id>/tags/add", methods=["POST"])
+def add_tag(track_id):
+    t = query("SELECT style_tags FROM track WHERE id=?", (track_id,), one=True)
+    if not t:
+        return redirect(url_for("tracks.library"))
+    tag = request.form.get("tag", "").strip()
+    tags = jload(t["style_tags"], [])
+    if tag and tag.lower() not in [x.lower() for x in tags]:
+        tags.append(tag)
+        execute("UPDATE track SET style_tags=? WHERE id=?", (jdump(tags), track_id))
+        flash(f"Added style tag '{tag}'.", "ok")
+    return redirect(url_for("tracks.detail", track_id=track_id))
+
+
+@bp.route("/<int:track_id>/tags/remove", methods=["POST"])
+def remove_tag(track_id):
+    t = query("SELECT style_tags FROM track WHERE id=?", (track_id,), one=True)
+    if not t:
+        return redirect(url_for("tracks.library"))
+    tag = request.form.get("tag", "")
+    tags = [x for x in jload(t["style_tags"], []) if x != tag]
+    execute("UPDATE track SET style_tags=? WHERE id=?", (jdump(tags), track_id))
+    flash(f"Removed style tag '{tag}'.", "ok")
+    return redirect(url_for("tracks.detail", track_id=track_id))
 
 
 @bp.route("/<int:track_id>/select/<int:candidate_id>", methods=["POST"])

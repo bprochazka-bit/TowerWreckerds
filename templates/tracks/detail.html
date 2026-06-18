@@ -32,9 +32,23 @@
       {% if track.duration %}<div><span class="k">Length</span><span class="v">{{ '%d:%02d'|format(track.duration // 60, track.duration % 60) }}</span></div>{% endif %}
       {% if track.seed %}<div><span class="k">Seed</span><span class="v mono">{{ track.seed }}</span></div>{% endif %}
     </div>
-    {% if style_tags %}<div class="chips" style="margin-top:12px">
-      {% for c in style_tags %}<span class="chip">{{ c }}</span>{% endfor %}
-    </div>{% endif %}
+    <div class="strip-label" style="margin-top:14px">Style tags</div>
+    <div class="chips chips-edit">
+      {% for c in style_tags %}
+      <span class="chip">{{ c }}<form method="post" style="display:inline"
+            action="{{ url_for('tracks.remove_tag', track_id=track.id) }}">
+        <input type="hidden" name="tag" value="{{ c }}">
+        <button class="chip-x" type="submit" title="remove">×</button>
+      </form></span>
+      {% else %}<span class="muted" style="font-size:12px">none yet</span>{% endfor %}
+    </div>
+    <form method="post" action="{{ url_for('tracks.add_tag', track_id=track.id) }}" class="tag-add">
+      <input type="text" name="tag" placeholder="add a style tag" list="tag-options" autocomplete="off">
+      <button class="btn sm" type="submit">Add</button>
+    </form>
+    <datalist id="tag-options">
+      {% for o in tag_options %}<option value="{{ o }}">{% endfor %}
+    </datalist>
     {% if environmentals %}<div class="chips" style="margin-top:8px">
       {% for e in environmentals %}<span class="chip teal">{{ e }}</span>{% endfor %}
     </div>{% endif %}
@@ -42,16 +56,21 @@
 
   <div class="panel">
     <div class="strip-label">Lyrics</div>
-    {% if track.lyrics %}
-      <pre class="lyrics">{{ track.lyrics }}</pre>
-    {% else %}
-      <p class="muted">No lyrics written yet.</p>
-      {% if release %}
-      <form class="gen-form" data-working="Writing lyrics" method="post"
-            action="{{ url_for('tracks.brief', track_id=track.id) }}">
-        <button class="btn" type="submit">Write lyrics &amp; full brief</button>
-      </form>
-      {% endif %}
+    <form method="post" action="{{ url_for('tracks.save_lyrics', track_id=track.id) }}">
+      <textarea name="lyrics" class="lyrics-edit" rows="16"
+                placeholder="Write the lyrics here, using [verse] / [chorus] section tags.">{{ track.lyrics or '' }}</textarea>
+      <div class="btn-row">
+        <button class="btn sm" type="submit">Save lyrics</button>
+        {% if release %}
+        <button class="btn sm ghost" type="submit" form="brief-form"
+          {% if track.lyrics %}onclick="return confirm('Re-generate lyrics and brief? This overwrites the current lyrics.')"{% endif %}>
+          {% if track.lyrics %}Re-generate brief{% else %}Write lyrics &amp; full brief{% endif %}</button>
+        {% endif %}
+      </div>
+    </form>
+    {% if release %}
+    <form id="brief-form" class="gen-form" data-working="Writing lyrics" method="post"
+          action="{{ url_for('tracks.brief', track_id=track.id) }}"></form>
     {% endif %}
   </div>
 </div>
