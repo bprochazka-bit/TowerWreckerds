@@ -7,7 +7,7 @@ from flask import (
     Blueprint, flash, jsonify, redirect, render_template, request, send_file, url_for,
 )
 
-from database import execute, jdump, jload, query
+from database import execute, jdump, jload, now_iso, query
 from backends.llm import LLMError
 from backends.acestep import ACEStepError
 import generation
@@ -161,12 +161,46 @@ def detail(track_id):
     tag_options = [r["name"] for r in query("SELECT name FROM style_tag ORDER BY name")]
     references = generation.list_reference_music()
     ref_path = generation.all_settings().get("reference_music_path", "")
+    # Performer pickers, only needed when the track isn't tied to a release yet.
+    assign_artists = assign_bands = None
+    if not release:
+        assign_artists = query("SELECT id, name FROM artist ORDER BY name")
+        assign_bands = query("SELECT id, name FROM band ORDER BY name")
     return render_template("tracks/detail.html", track=track, release=release,
                            candidates=candidates,
                            style_tags=jload(track["style_tags"]),
                            environmentals=jload(track["environmentals"]),
                            tag_options=tag_options, references=references,
-                           ref_path=ref_path)
+                           ref_path=ref_path, assign_artists=assign_artists,
+                           assign_bands=assign_bands)
+
+
+@bp.route("/<int:track_id>/assign", methods=["POST"])
+def assign(track_id):
+    """Associate a standalone track with a performer by wrapping it in a release
+    (a single by default) owned by that artist or band."""
+    t = query("SELECT * FROM track WHERE id=?", (track_id,), one=True)
+    if not t:
+        return redirect(url_for("tracks.library"))
+    if t["release_id"]:
+        flash("This track already belongs to a release.", "error")
+        return redirect(url_for("tracks.detail", track_id=track_id))
+    owner = request.form.get("owner", "")
+    if ":" not in owner:
+        flash("Choose a performer to associate with this track.", "error")
+        return redirect(url_for("tracks.detail", track_id=track_id))
+    owner_type, oid = owner.split(":", 1)
+    rtype = request.form.get("type", "single")
+    if rtype not in ("single", "ep", "album"):
+        rtype = "single"
+    title = request.form.get("title", "").strip() or (t["title"] or "Single")
+    rid = execute(
+        "INSERT INTO release (owner_type, owner_id, type, title, status, created_at)"
+        " VALUES (?,?,?,?,?,?)",
+        (owner_type, int(oid), rtype, title, "tracklist", now_iso()))
+    execute("UPDATE track SET release_id=?, position=1 WHERE id=?", (rid, track_id))
+    flash(f"Track associated — created a {rtype} for the performer.", "ok")
+    return redirect(url_for("albums.detail", album_id=rid))
 
 
 @bp.route("/<int:track_id>/lyrics", methods=["POST"])

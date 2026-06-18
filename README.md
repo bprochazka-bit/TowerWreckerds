@@ -296,6 +296,12 @@ A track page has a **Download MP3** button (it publishes the single track on
 demand if needed, then downloads it), and the **Published** section browses every
 exported track — grouped by album, with per-track download links.
 
+A standalone (freeform) track that isn't tied to a release shows a **Performer**
+panel: pick an artist or band (or create one first) to associate the track with
+them. That wraps the track in a release (a single by default) owned by the
+performer — so it appears under their releases, and the performer's influences
+and lead vocal apply on the next render.
+
 ## Taxonomy
 
 The Admin console also manages the **genre** and **style-tag** taxonomy the

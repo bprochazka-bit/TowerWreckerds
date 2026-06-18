@@ -22,6 +22,48 @@
   {% if track.reference_audio %}<span class="mono muted">cover of {{ track.reference_audio }}</span>{% endif %}
 </div>
 
+{% if not release %}
+<div class="panel" style="margin-top:16px">
+  <div class="strip-label">Performer</div>
+  {% if assign_artists or assign_bands %}
+  <p class="muted" style="font-size:12px">This track isn't associated with anyone
+    yet. Pick an artist or band — that creates a release for them containing this
+    track, and the performer's influences and lead vocal then apply on render.</p>
+  <form method="post" action="{{ url_for('tracks.assign', track_id=track.id) }}">
+    <label>Associate with</label>
+    <select name="owner" required>
+      <option value="">— choose a performer —</option>
+      {% if assign_bands %}<optgroup label="Bands">
+        {% for b in assign_bands %}<option value="band:{{ b.id }}">{{ b.name }}</option>{% endfor %}
+      </optgroup>{% endif %}
+      {% if assign_artists %}<optgroup label="Solo artists">
+        {% for a in assign_artists %}<option value="artist:{{ a.id }}">{{ a.name }}</option>{% endfor %}
+      </optgroup>{% endif %}
+    </select>
+    <div class="field-row" style="margin-top:10px">
+      <div><label>Release title</label>
+        <input type="text" name="title" value="{{ track.title or '' }}"></div>
+      <div><label>As</label>
+        <select name="type">
+          <option value="single">single</option>
+          <option value="ep">EP</option>
+          <option value="album">album</option>
+        </select></div>
+    </div>
+    <div class="btn-row"><button class="btn" type="submit">Associate</button></div>
+  </form>
+  <p class="muted" style="font-size:12px;margin-top:10px">Need to make one first?
+    <a href="{{ url_for('artists.new_artist') }}">Create an artist</a> ·
+    <a href="{{ url_for('bands.new_band') }}">Create a band</a></p>
+  {% else %}
+  <p class="muted">No artists or bands exist yet.
+    <a href="{{ url_for('artists.new_artist') }}">Create an artist</a> or
+    <a href="{{ url_for('bands.new_band') }}">create a band</a>, then return here to
+    associate this track.</p>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="grid cols-2" style="margin-top:16px">
   <div class="panel">
     <div class="strip-label">Production brief</div>
