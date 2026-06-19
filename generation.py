@@ -550,9 +550,8 @@ Lyrics must fit the subject and the artist's voice.
     data = llm.generate_json(user, system=system)
     base_cues = jload(t["style_tags"], [])
     final_tags = base_cues + data.get("style_tags", []) + _refinement_tags(refinement)
-    # Instrumentals and covers don't carry written lyrics.
+    # Instrumentals carry no written lyrics; covers do (sung over the source style).
     no_lyrics = bool(t["instrumental"]) if "instrumental" in t.keys() else False
-    no_lyrics = no_lyrics or bool(t["reference_audio"])
     lyrics_out = "" if no_lyrics else data.get("lyrics", "")
     execute(
         "UPDATE track SET lyrics=?, style_tags=?, tempo=?, song_key=?, mood=?,"
@@ -573,9 +572,8 @@ def regenerate_lyrics(track_id):
     t = query("SELECT * FROM track WHERE id = ?", (track_id,), one=True)
     if not t:
         raise ValueError("track not found")
-    if (("instrumental" in t.keys() and t["instrumental"]) or t["reference_audio"]):
-        raise LLMError("This track doesn't use written lyrics "
-                       "(it's an instrumental or a cover).")
+    if "instrumental" in t.keys() and t["instrumental"]:
+        raise LLMError("This track is an instrumental — it has no lyrics.")
     ctx = ""
     if t["release_id"]:
         rel = query("SELECT owner_type, owner_id FROM release WHERE id = ?",
@@ -618,11 +616,11 @@ def brief_album(album_id, progress=None, cancel=None):
     `cancel()` is polled between tracks to stop early.
     """
     tracks = query(
-        "SELECT id, lyrics, instrumental, reference_audio FROM track"
+        "SELECT id, lyrics, instrumental FROM track"
         " WHERE release_id = ? ORDER BY position", (album_id,))
-    # Skip tracks that don't use written lyrics: instrumentals and covers.
+    # Skip instrumentals (no written lyrics); covers still get their own lyrics.
     to_brief = [t for t in tracks if not (t["lyrics"] or "").strip()
-                and not t["instrumental"] and not t["reference_audio"]]
+                and not t["instrumental"]]
     res = {"briefed": 0, "skipped": len(tracks) - len(to_brief),
            "failed": 0, "cancelled": 0, "errors": []}
     for idx, t in enumerate(to_brief):
@@ -659,12 +657,12 @@ def render_album(album_id, progress=None, cancel=None):
     `cancel()` is polled between tracks (and between candidates) to stop early.
     """
     tracks = query(
-        "SELECT id, lyrics, audio_path, instrumental, reference_audio"
+        "SELECT id, lyrics, audio_path, instrumental"
         " FROM track WHERE release_id = ? ORDER BY position", (album_id,))
 
     def _renderable(t):
-        # Has a brief (lyrics), or is an instrumental, or is a cover (source-driven).
-        return bool((t["lyrics"] or "").strip() or t["instrumental"] or t["reference_audio"])
+        # Has a brief (lyrics), or is an instrumental. Covers carry their own lyrics.
+        return bool((t["lyrics"] or "").strip() or t["instrumental"])
 
     to_render = [t for t in tracks if not t["audio_path"] and _renderable(t)]
     res = {"rendered": 0, "skipped": 0, "failed": 0, "cancelled": 0, "errors": []}
@@ -819,31 +817,33 @@ def create_cover_track(reference_rel, owner_type=None, owner_id=None, notes=""):
     if owner_type and owner_id:
         ctx, _ = _owner_context(owner_type, owner_id, for_lyrics=True)
         refinement = _owner_refinement(owner_type, owner_id)
-    system = ("You reinterpret an existing song as a cover, recast in a new "
-              "performer's style. The cover follows the SOURCE recording, so do "
-              "NOT write any lyrics — only the production/style brief.")
+    system = ("You write an original song to be performed in the musical STYLE of "
+              "a reference track (rendered audio2audio). The new song has its own "
+              "lyrics — it is not a re-recording of the reference.")
     ctx_block = f"Performer context:\n{ctx}\n" if ctx else ""
-    user = f"""{ctx_block}Original song to cover: "{ref_title}"
-{('Direction from the user: ' + notes) if notes else ''}
+    user = f"""{ctx_block}Style reference (for vibe/production feel only): "{ref_title}"
+{('Direction for the new song: ' + notes) if notes else ''}
 
-This is an audio2audio cover that follows the source recording — do not write
-lyrics. Return JSON with keys:
-  title (keep or lightly adapt the original title),
-  subject, summary (how this cover reinterprets the original — style/arrangement),
-  style_tags (array of production/style descriptors), tempo (bpm int), key, mood,
+Write an original song to render in that style. Return JSON with keys:
+  title, subject, summary,
+  lyrics (with [verse]/[chorus] tags; the song's own words),
+  style_tags (array), tempo (bpm int), key, mood,
   environmentals (array), duration_seconds (int).
+
+{_lyric_style_line()}{LYRIC_RULES}
 """
     data = llm.generate_json(user, system=system)
     final_tags = data.get("style_tags", []) + _refinement_tags(refinement)
     influence = _owner_influences(owner_type, owner_id) if (owner_type and owner_id) else ""
-    # No lyrics and no baked vocal directive: the cover is driven by the source.
+    if owner_type and owner_id:
+        final_tags = _apply_vocal_to_tags(final_tags, _owner_vocal(owner_type, owner_id))
     tid = execute(
         "INSERT INTO track (position, role, title, subject, summary, lyrics, style_tags,"
         " tempo, song_key, mood, environmentals, duration, reference_audio, influences,"
         " status, source, created_at)"
         " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (1, "cover", data.get("title", ref_title), data.get("subject", ""),
-         data.get("summary", ""), "", jdump(final_tags),
+         data.get("summary", ""), data.get("lyrics", ""), jdump(final_tags),
          data.get("tempo"), data.get("key", ""), data.get("mood", ""),
          jdump(data.get("environmentals", [])), data.get("duration_seconds", 180),
          reference_rel, influence, "briefed", "cover", now_iso()),
@@ -1078,23 +1078,20 @@ def render_track(track_id, progress=None, cancel=None):
         tags = f"{tags}, {influence}" if tags else influence
 
     instrumental = bool(t["instrumental"]) if "instrumental" in t.keys() else False
-    # A cover renders audio2audio from a reference recording; the source carries
-    # the song, so covers — like instrumentals — neither generate nor forward
-    # lyrics, and don't inject a vocal-gender directive.
+    # A cover renders audio2audio: the source recording supplies the musical
+    # STYLE/structure, but the track's own lyrics are still sung over it. Only an
+    # instrumental suppresses lyrics/vocals.
     ref_abs = reference_music_abspath(t["reference_audio"]) if t["reference_audio"] else None
-    is_cover = ref_abs is not None
-    no_vocal_text = instrumental or is_cover
 
-    # Lead-vocal gender wins over any default/LLM guess, except when there are no
-    # generated vocals (instrumental, or a source-driven cover).
-    vocal = "" if no_vocal_text else _owner_vocal(owner_type, owner_id)
+    # Lead-vocal gender wins over any default/LLM guess, except for instrumentals.
+    vocal = "" if instrumental else _owner_vocal(owner_type, owner_id)
     if vocal:
         segs = [s for s in (tags.split(", ") if tags else []) if s and not _is_vocal_directive(s)]
         segs.append(f"{vocal} vocal")
         tags = ", ".join(segs)
 
-    if no_vocal_text:
-        lyrics = "[Instrumental]"   # no fabricated or forwarded lyrics
+    if instrumental:
+        lyrics = "[Instrumental]"   # no vocals
     else:
         lyrics = t["lyrics"] or ""
         if str(settings.get("lyrics_strip_parentheticals", "1")) in ("1", "true", "True", "on"):
