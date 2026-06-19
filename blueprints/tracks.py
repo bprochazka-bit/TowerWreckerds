@@ -75,12 +75,15 @@ def cover():
         owner_type, oid = owner.split(":", 1)
         owner_id = int(oid)
     try:
-        tid = generation.create_cover_track(
+        tid, lyrics_source = generation.create_cover_track(
             reference, owner_type, owner_id, request.form.get("notes", "").strip())
     except LLMError as exc:
         flash(f"Generation failed: {exc}", "error")
         return redirect(url_for("tracks.new_cover"))
-    flash("Cover brief written from the reference track.", "ok")
+    if lyrics_source == "fetched":
+        flash("Cover created — found and used the original lyrics.", "ok")
+    else:
+        flash("Cover created — no original lyrics found, so new lyrics were written.", "ok")
     return redirect(url_for("tracks.detail", track_id=tid))
 
 

@@ -904,11 +904,10 @@ def fetch_reference_lyrics(reference_rel):
 
 
 def create_cover_track(reference_rel, owner_type=None, owner_id=None, notes=""):
-    """Write a cover/reinterpretation of a reference track in a performer's style.
-
-    The reference is grounded by its title (filename); the performer's persona
-    and genre steer the reimagining. The reference path is stored for provenance
-    and shown on the track page.
+    """Create a cover of a reference track. Tries to fetch the original song's
+    lyrics first (LRCLIB); only if that fails does it generate new lyrics. Either
+    way the render borrows the reference's musical style (audio2audio). Returns
+    (track_id, lyrics_source) where lyrics_source is 'fetched' or 'generated'.
     """
     llm = LLMClient()
     ref_title = os.path.splitext(os.path.basename(reference_rel))[0]
@@ -917,22 +916,40 @@ def create_cover_track(reference_rel, owner_type=None, owner_id=None, notes=""):
     if owner_type and owner_id:
         ctx, _ = _owner_context(owner_type, owner_id, for_lyrics=True)
         refinement = _owner_refinement(owner_type, owner_id)
-    system = ("You write an original song to be performed in the musical STYLE of "
-              "a reference track (rendered audio2audio). The new song has its own "
-              "lyrics — it is not a re-recording of the reference.")
+
+    # Prefer the original song's real lyrics; only generate when none are found.
+    fetched = None
+    try:
+        fetched = fetch_reference_lyrics(reference_rel)
+    except Exception:
+        fetched = None
+
     ctx_block = f"Performer context:\n{ctx}\n" if ctx else ""
+    if fetched:
+        system = ("You write a production/style brief for a cover that REUSES the "
+                  "original lyrics. Do not write any lyrics.")
+        keys = ("  title, subject, summary,\n"
+                "  style_tags (array), tempo (bpm int), key, mood,\n"
+                "  environmentals (array), duration_seconds (int).")
+        rules = ""
+    else:
+        system = ("You write an original song performed in the musical STYLE of a "
+                  "reference track (rendered audio2audio). The new song has its own "
+                  "lyrics — it is not a re-recording of the reference.")
+        keys = ("  title, subject, summary,\n"
+                "  lyrics (with [verse]/[chorus] tags; the song's own words),\n"
+                "  style_tags (array), tempo (bpm int), key, mood,\n"
+                "  environmentals (array), duration_seconds (int).")
+        rules = f"\n{_lyric_style_line()}{LYRIC_RULES}"
     user = f"""{ctx_block}Style reference (for vibe/production feel only): "{ref_title}"
-{('Direction for the new song: ' + notes) if notes else ''}
+{('Direction: ' + notes) if notes else ''}
 
-Write an original song to render in that style. Return JSON with keys:
-  title, subject, summary,
-  lyrics (with [verse]/[chorus] tags; the song's own words),
-  style_tags (array), tempo (bpm int), key, mood,
-  environmentals (array), duration_seconds (int).
-
-{_lyric_style_line()}{LYRIC_RULES}
+Return JSON with keys:
+{keys}
+{rules}
 """
     data = llm.generate_json(user, system=system)
+    lyrics_out = fetched if fetched else data.get("lyrics", "")
     final_tags = data.get("style_tags", []) + _refinement_tags(refinement)
     influence = _owner_influences(owner_type, owner_id) if (owner_type and owner_id) else ""
     if owner_type and owner_id:
@@ -943,12 +960,12 @@ Write an original song to render in that style. Return JSON with keys:
         " status, source, created_at)"
         " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (1, "cover", data.get("title", ref_title), data.get("subject", ""),
-         data.get("summary", ""), data.get("lyrics", ""), jdump(final_tags),
+         data.get("summary", ""), lyrics_out, jdump(final_tags),
          data.get("tempo"), data.get("key", ""), data.get("mood", ""),
          jdump(data.get("environmentals", [])), data.get("duration_seconds", 180),
          reference_rel, influence, "briefed", "cover", now_iso()),
     )
-    return tid
+    return tid, ("fetched" if fetched else "generated")
 
 
 # ---------------------------------------------------------------------------
