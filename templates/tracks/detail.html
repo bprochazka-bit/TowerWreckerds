@@ -6,6 +6,10 @@
     <span class="eyebrow">04 · track{% if release %} · {{ release.title }}{% else %} · freeform{% endif %}</span>
     <h1>{{ track.title or 'Untitled' }}</h1>
     {% if track.subject %}<p class="sub">{{ track.subject }}</p>{% endif %}
+    <form class="rename-form" method="post" action="{{ url_for('tracks.rename', track_id=track.id) }}">
+      <input type="text" name="title" value="{{ track.title or '' }}" aria-label="Track title">
+      <button class="btn sm ghost" type="submit">Rename</button>
+    </form>
   </div>
   <form method="post" action="{{ url_for('tracks.delete', track_id=track.id) }}"
         onsubmit="return confirm('Delete this track?')">

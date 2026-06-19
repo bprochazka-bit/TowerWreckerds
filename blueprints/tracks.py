@@ -209,6 +209,27 @@ def assign(track_id):
     return redirect(url_for("albums.detail", album_id=rid))
 
 
+@bp.route("/<int:track_id>/rename", methods=["POST"])
+def rename(track_id):
+    t = query("SELECT release_id FROM track WHERE id=?", (track_id,), one=True)
+    if not t:
+        return redirect(url_for("tracks.library"))
+    name = request.form.get("title", "").strip()
+    if not name:
+        flash("Title can't be empty.", "error")
+        return redirect(url_for("tracks.detail", track_id=track_id))
+    execute("UPDATE track SET title=? WHERE id=?", (name, track_id))
+    # Keep a single's release title in sync with its sole track.
+    if t["release_id"]:
+        rel = query(
+            "SELECT type, (SELECT COUNT(*) FROM track WHERE release_id=r.id) AS c"
+            " FROM release r WHERE id=?", (t["release_id"],), one=True)
+        if rel and rel["type"] == "single" and rel["c"] == 1:
+            execute("UPDATE release SET title=? WHERE id=?", (name, t["release_id"]))
+    flash("Track renamed.", "ok")
+    return redirect(url_for("tracks.detail", track_id=track_id))
+
+
 @bp.route("/<int:track_id>/lyrics", methods=["POST"])
 def save_lyrics(track_id):
     if not query("SELECT 1 FROM track WHERE id=?", (track_id,), one=True):

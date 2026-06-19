@@ -1008,7 +1008,9 @@ Return JSON with keys:
     influence = _owner_influences(owner_type, owner_id) if (owner_type and owner_id) else ""
     if owner_type and owner_id:
         final_tags = _apply_vocal_to_tags(final_tags, _owner_vocal(owner_type, owner_id))
-    title = _text(data.get("title")) or ref_title
+    # Name the cover after the original song: "Original Title (Cover)".
+    _, orig_title = _reference_artist_title(reference_rel)
+    title = f"{(orig_title or ref_title).strip()} (Cover)"
     tid = execute(
         "INSERT INTO track (position, role, title, subject, summary, lyrics, style_tags,"
         " tempo, song_key, mood, environmentals, duration, reference_audio, influences,"
