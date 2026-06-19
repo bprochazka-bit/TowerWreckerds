@@ -222,9 +222,10 @@ if you want to set it directly. Standalone/cover tracks snapshot it when created
 
 Point the app at a folder of existing audio in **Admin → Reference music
 (covers)** (`reference_music_path`). Then open **Tracks → Cover a song**, pick a
-reference track and (optionally) a performer, and the model writes a brief — new
-lyrics, mood, tempo, and style cues — that reinterprets the original in that
-performer's voice.
+reference track and (optionally) a performer, and the model writes a style brief
+(mood, tempo, style cues). Because the cover follows the source recording, **no
+lyrics are written or sent** — covers (like instrumentals) render with
+`[Instrumental]` lyric conditioning so nothing fabricated is sung over them.
 
 When the cover is rendered, the reference recording is sent to ACE-Step as the
 source for a real **audio2audio cover** (acestep.cpp `task_type="cover"`): the
