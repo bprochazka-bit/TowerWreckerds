@@ -68,6 +68,44 @@ def _refinement_tags(refinement):
     return ["polished studio production", "tight arrangement", "clean professional mix"]
 
 
+# --- coercion of model output (LLMs sometimes return the wrong JSON type) ----
+
+def _text(v):
+    """Coerce a model value to a scalar text string for a TEXT column."""
+    if v is None:
+        return ""
+    if isinstance(v, (list, tuple)):
+        return ", ".join(str(x) for x in v if x is not None)
+    return str(v)
+
+
+def _lyrics_text(v):
+    """Lyrics may come back as a list of lines; join them with newlines."""
+    if isinstance(v, (list, tuple)):
+        return "\n".join(str(x) for x in v)
+    return v or ""
+
+
+def _intval(v, default=None):
+    if isinstance(v, (list, tuple)):
+        v = v[0] if v else None
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return default
+
+
+def _aslist(v):
+    """Coerce a model value to a list of strings (accepts a list or a delimited string)."""
+    if v is None:
+        return []
+    if isinstance(v, (list, tuple)):
+        return [str(x).strip() for x in v if str(x).strip()]
+    if isinstance(v, str):
+        return [s.strip() for s in re.split(r"[;,]", v) if s.strip()]
+    return [str(v)]
+
+
 # ---------------------------------------------------------------------------
 # Artist
 # ---------------------------------------------------------------------------
@@ -116,16 +154,16 @@ def _persist_artist(data, artist_type="solo"):
         " secondary_genres, stage, refinement, vocal, created_at)"
         " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (
-            data.get("name", "Untitled Artist"),
+            _text(data.get("name")) or "Untitled Artist",
             artist_type,
-            data.get("persona", ""),
-            data.get("backstory", ""),
-            data.get("region", ""),
-            data.get("primary_genre", ""),
-            jdump(data.get("secondary_genres", [])),
-            data.get("stage", "emerging"),
-            float(data.get("refinement", 0.3) or 0.3),
-            _norm_vocal(data.get("gender") or data.get("vocal")),
+            _text(data.get("persona", "")),
+            _text(data.get("backstory", "")),
+            _text(data.get("region", "")),
+            _text(data.get("primary_genre", "")),
+            jdump(_aslist(data.get("secondary_genres"))),
+            _text(data.get("stage", "emerging")) or "emerging",
+            float(data.get("refinement", 0.3) or 0.3) if not isinstance(data.get("refinement"), (list, dict)) else 0.3,
+            _norm_vocal(_text(data.get("gender") or data.get("vocal"))),
             now_iso(),
         ),
     )
@@ -157,8 +195,8 @@ Members should feel like real people with chemistry and tension.
     band_id = execute(
         "INSERT INTO band (name, primary_genre, backstory, formed_on, created_at)"
         " VALUES (?,?,?,?,?)",
-        (data.get("name", "Untitled Band"), data.get("primary_genre", ""),
-         data.get("backstory", ""), now_iso()[:10], now_iso()),
+        (_text(data.get("name")) or "Untitled Band", _text(data.get("primary_genre", "")),
+         _text(data.get("backstory", "")), now_iso()[:10], now_iso()),
     )
     for m in data.get("members", []):
         aid = _persist_artist(
@@ -175,7 +213,7 @@ Members should feel like real people with chemistry and tension.
         execute(
             "INSERT INTO membership (artist_id, band_id, instrument, joined_on)"
             " VALUES (?,?,?,?)",
-            (aid, band_id, m.get("instrument", ""), now_iso()[:10]),
+            (aid, band_id, _text(m.get("instrument", "")), now_iso()[:10]),
         )
     return band_id
 
@@ -208,9 +246,9 @@ The backstory should reference how these specific people came together.
     band_id = execute(
         "INSERT INTO band (name, primary_genre, backstory, formed_on, created_at)"
         " VALUES (?,?,?,?,?)",
-        (data.get("name", name_hint or "Untitled Band"),
-         data.get("primary_genre", genre_hint or ""),
-         data.get("backstory", ""), now_iso()[:10], now_iso()),
+        (_text(data.get("name")) or name_hint or "Untitled Band",
+         _text(data.get("primary_genre")) or genre_hint or "",
+         _text(data.get("backstory", "")), now_iso()[:10], now_iso()),
     )
     for spec in member_specs:
         execute(
@@ -357,15 +395,16 @@ _TRACK_KEYS_DOC = """     position (int, 1-based),
 
 def _insert_tracklist(rid, tracks, position_from=None):
     for i, t in enumerate(tracks):
-        cues = t.get("style_cues", [])
-        pos = (position_from + i) if position_from is not None else t.get("position", 1)
+        cues = _aslist(t.get("style_cues"))
+        pos = (position_from + i) if position_from is not None else _intval(t.get("position"), i + 1)
         execute(
             "INSERT INTO track (release_id, position, role, title, subject, summary,"
             " style_tags, tempo, mood, duration, status, source, created_at)"
             " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (rid, pos, t.get("role", ""), t.get("title", "Untitled"),
-             t.get("subject", ""), t.get("summary", ""), jdump(cues),
-             t.get("tempo"), t.get("mood", ""), t.get("length_seconds", 180),
+            (rid, pos, _text(t.get("role", "")), _text(t.get("title", "Untitled")),
+             _text(t.get("subject", "")), _text(t.get("summary", "")), jdump(cues),
+             _intval(t.get("tempo")), _text(t.get("mood", "")),
+             _intval(t.get("length_seconds"), 180),
              "briefed", "album", now_iso()),
         )
 
@@ -408,12 +447,12 @@ Return JSON with keys:
 Sequence the roles sensibly (opener first, closer last).
 """
     data = llm.generate_json(user, system=system)
-    final_title = fixed_title or data.get("title", "Untitled")
+    final_title = fixed_title or _text(data.get("title")) or "Untitled"
     rid = execute(
         "INSERT INTO release (owner_type, owner_id, type, title, concept, inspiration,"
         " ethos, style_tags, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (owner_type, owner_id, rel_type, final_title,
-         data.get("concept", ""), data.get("inspiration", ""), ethos or "",
+         _text(data.get("concept", "")), _text(data.get("inspiration", "")), ethos or "",
          jdump(style_tags), "tracklist", now_iso()),
     )
     _insert_tracklist(rid, data.get("tracks", []))
@@ -549,17 +588,17 @@ Lyrics must fit the subject and the artist's voice.
 """
     data = llm.generate_json(user, system=system)
     base_cues = jload(t["style_tags"], [])
-    final_tags = base_cues + data.get("style_tags", []) + _refinement_tags(refinement)
+    final_tags = base_cues + _aslist(data.get("style_tags")) + _refinement_tags(refinement)
     # Instrumentals carry no written lyrics; covers do (sung over the source style).
     no_lyrics = bool(t["instrumental"]) if "instrumental" in t.keys() else False
-    lyrics_out = "" if no_lyrics else data.get("lyrics", "")
+    lyrics_out = "" if no_lyrics else _lyrics_text(data.get("lyrics", ""))
     execute(
         "UPDATE track SET lyrics=?, style_tags=?, tempo=?, song_key=?, mood=?,"
         " environmentals=?, duration=?, status='briefed' WHERE id=?",
-        (lyrics_out, jdump(final_tags), data.get("tempo", t["tempo"]),
-         data.get("key", ""), data.get("mood", t["mood"]),
-         jdump(data.get("environmentals", [])),
-         data.get("duration_seconds", t["duration"]), track_id),
+        (lyrics_out, jdump(final_tags), _intval(data.get("tempo"), t["tempo"]),
+         _text(data.get("key", "")), _text(data.get("mood", t["mood"])),
+         jdump(_aslist(data.get("environmentals"))),
+         _intval(data.get("duration_seconds"), t["duration"]), track_id),
     )
     return track_id
 
@@ -598,7 +637,7 @@ single key "lyrics" whose value is the lyric text.
 """
     data = llm.generate_json(user, system=system)
     if isinstance(data, dict):
-        lyrics = data.get("lyrics") or data.get("text") or ""
+        lyrics = _lyrics_text(data.get("lyrics") or data.get("text") or "")
     else:
         lyrics = data if isinstance(data, str) else ""
     if not (lyrics or "").strip():
@@ -731,24 +770,24 @@ Return JSON with keys:
 {_lyric_style_line()}{LYRIC_RULES}
 """
     data = llm.generate_json(user, system=system)
-    final_tags = data.get("style_tags", []) + _refinement_tags(refinement)
+    final_tags = _aslist(data.get("style_tags")) + _refinement_tags(refinement)
     influence = _owner_influences(owner_type, owner_id) if (owner_type and owner_id) else ""
     if owner_type and owner_id:
         final_tags = _apply_vocal_to_tags(final_tags, _owner_vocal(owner_type, owner_id))
+    title = _text(data.get("title")) or "Untitled"
     tid = execute(
         "INSERT INTO track (position, role, title, subject, summary, lyrics, style_tags,"
         " tempo, song_key, mood, environmentals, duration, influences, status, source, created_at)"
         " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (1, "single", data.get("title", "Untitled"), data.get("subject", ""),
-         data.get("summary", ""), data.get("lyrics", ""), jdump(final_tags),
-         data.get("tempo"), data.get("key", ""), data.get("mood", ""),
-         jdump(data.get("environmentals", [])), data.get("duration_seconds", 180),
+        (1, "single", title, _text(data.get("subject", "")),
+         _text(data.get("summary", "")), _lyrics_text(data.get("lyrics", "")), jdump(final_tags),
+         _intval(data.get("tempo")), _text(data.get("key", "")), _text(data.get("mood", "")),
+         jdump(_aslist(data.get("environmentals"))), _intval(data.get("duration_seconds"), 180),
          influence, "briefed", "freeform", now_iso()),
     )
     # Attributing to a performer associates the track with them (as a single).
     if owner_type and owner_id:
-        associate_track_with_owner(tid, owner_type, owner_id,
-                                   data.get("title", "Untitled"))
+        associate_track_with_owner(tid, owner_type, owner_id, title)
     return tid
 
 
@@ -964,26 +1003,26 @@ Return JSON with keys:
 {rules}
 """
     data = llm.generate_json(user, system=system)
-    lyrics_out = fetched if fetched else data.get("lyrics", "")
-    final_tags = data.get("style_tags", []) + _refinement_tags(refinement)
+    lyrics_out = fetched if fetched else _lyrics_text(data.get("lyrics", ""))
+    final_tags = _aslist(data.get("style_tags")) + _refinement_tags(refinement)
     influence = _owner_influences(owner_type, owner_id) if (owner_type and owner_id) else ""
     if owner_type and owner_id:
         final_tags = _apply_vocal_to_tags(final_tags, _owner_vocal(owner_type, owner_id))
+    title = _text(data.get("title")) or ref_title
     tid = execute(
         "INSERT INTO track (position, role, title, subject, summary, lyrics, style_tags,"
         " tempo, song_key, mood, environmentals, duration, reference_audio, influences,"
         " status, source, created_at)"
         " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (1, "cover", data.get("title", ref_title), data.get("subject", ""),
-         data.get("summary", ""), lyrics_out, jdump(final_tags),
-         data.get("tempo"), data.get("key", ""), data.get("mood", ""),
-         jdump(data.get("environmentals", [])), data.get("duration_seconds", 180),
+        (1, "cover", title, _text(data.get("subject", "")),
+         _text(data.get("summary", "")), lyrics_out, jdump(final_tags),
+         _intval(data.get("tempo")), _text(data.get("key", "")), _text(data.get("mood", "")),
+         jdump(_aslist(data.get("environmentals"))), _intval(data.get("duration_seconds"), 180),
          reference_rel, influence, "briefed", "cover", now_iso()),
     )
     # Attributing to a performer associates the cover with them (as a single).
     if owner_type and owner_id:
-        associate_track_with_owner(tid, owner_type, owner_id,
-                                   data.get("title", ref_title))
+        associate_track_with_owner(tid, owner_type, owner_id, title)
     return tid, ("fetched" if fetched else "generated")
 
 
