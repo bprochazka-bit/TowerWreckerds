@@ -224,7 +224,10 @@ Point the app at a folder of existing audio in **Admin → Reference music
 (covers)** (`reference_music_path`). Then open **Tracks → Cover a song**, pick a
 reference track and (optionally) a performer, and the model writes an **original
 song with its own lyrics** in the reference's vibe. The render borrows the
-reference's musical *style* — it is not a re-recording of the original.
+reference's musical *style* — it is not a re-recording of the original. Choosing
+a performer **associates** the cover with them (it's saved as a single under that
+artist/band), and the same applies when you attribute a free-text track to a
+performer.
 
 When the cover is rendered, the reference recording is sent to ACE-Step as the
 source for an **audio2audio** render (acestep.cpp `task_type="cover"`): the

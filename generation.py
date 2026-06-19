@@ -745,6 +745,10 @@ Return JSON with keys:
          jdump(data.get("environmentals", [])), data.get("duration_seconds", 180),
          influence, "briefed", "freeform", now_iso()),
     )
+    # Attributing to a performer associates the track with them (as a single).
+    if owner_type and owner_id:
+        associate_track_with_owner(tid, owner_type, owner_id,
+                                   data.get("title", "Untitled"))
     return tid
 
 
@@ -765,6 +769,17 @@ def _owner_name_genre(owner_type, owner_id):
         return (b["name"], b["primary_genre"]) if b else ("Unknown Artist", "")
     a = query("SELECT name, primary_genre FROM artist WHERE id = ?", (owner_id,), one=True)
     return (a["name"], a["primary_genre"]) if a else ("Unknown Artist", "")
+
+
+def associate_track_with_owner(track_id, owner_type, owner_id, title, rtype="single"):
+    """Attach a standalone track to a performer by wrapping it in a release (a
+    single by default) owned by that artist/band. Returns the release id."""
+    rid = execute(
+        "INSERT INTO release (owner_type, owner_id, type, title, status, created_at)"
+        " VALUES (?,?,?,?,?,?)",
+        (owner_type, owner_id, rtype, title or "Single", "tracklist", now_iso()))
+    execute("UPDATE track SET release_id=?, position=1 WHERE id=?", (rid, track_id))
+    return rid
 
 
 # ---------------------------------------------------------------------------
@@ -965,6 +980,10 @@ Return JSON with keys:
          jdump(data.get("environmentals", [])), data.get("duration_seconds", 180),
          reference_rel, influence, "briefed", "cover", now_iso()),
     )
+    # Attributing to a performer associates the cover with them (as a single).
+    if owner_type and owner_id:
+        associate_track_with_owner(tid, owner_type, owner_id,
+                                   data.get("title", ref_title))
     return tid, ("fetched" if fetched else "generated")
 
 
