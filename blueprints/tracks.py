@@ -160,7 +160,10 @@ def detail(track_id):
         "SELECT * FROM candidate WHERE track_id=? ORDER BY integrity DESC, id", (track_id,))
     tag_options = [r["name"] for r in query("SELECT name FROM style_tag ORDER BY name")]
     references = generation.list_reference_music()
-    ref_path = generation.all_settings().get("reference_music_path", "")
+    _s = generation.all_settings()
+    ref_path = _s.get("reference_music_path", "")
+    cover_defaults = {"strength": _s.get("acestep_cover_strength", ""),
+                      "noise": _s.get("acestep_cover_noise", "")}
     # Performer pickers, only needed when the track isn't tied to a release yet.
     assign_artists = assign_bands = None
     if not release:
@@ -171,8 +174,8 @@ def detail(track_id):
                            style_tags=jload(track["style_tags"]),
                            environmentals=jload(track["environmentals"]),
                            tag_options=tag_options, references=references,
-                           ref_path=ref_path, assign_artists=assign_artists,
-                           assign_bands=assign_bands)
+                           ref_path=ref_path, cover_defaults=cover_defaults,
+                           assign_artists=assign_artists, assign_bands=assign_bands)
 
 
 @bp.route("/<int:track_id>/assign", methods=["POST"])
@@ -229,13 +232,41 @@ def save_source(track_id):
 @bp.route("/<int:track_id>/reference", methods=["POST"])
 def set_reference(track_id):
     """Attach (or clear) a reference recording so the track renders as an
-    audio2audio cover."""
+    audio2audio cover, with optional per-track cover strength/noise overrides."""
     if not query("SELECT 1 FROM track WHERE id=?", (track_id,), one=True):
         return redirect(url_for("tracks.library"))
     ref = request.form.get("reference", "").strip()
-    execute("UPDATE track SET reference_audio=? WHERE id=?", (ref or None, track_id))
-    flash("Cover reference set — renders as an audio2audio cover."
+
+    def _num(name):
+        v = request.form.get(name, "").strip()
+        try:
+            return float(v) if v != "" else None
+        except ValueError:
+            return None
+
+    execute("UPDATE track SET reference_audio=?, cover_strength=?, cover_noise=? WHERE id=?",
+            (ref or None, _num("cover_strength"), _num("cover_noise"), track_id))
+    flash("Cover reference saved — renders as an audio2audio cover."
           if ref else "Cover reference cleared.", "ok")
+    return redirect(url_for("tracks.detail", track_id=track_id))
+
+
+@bp.route("/<int:track_id>/fetch-lyrics", methods=["POST"])
+def fetch_lyrics(track_id):
+    """Fill the lyrics box with the reference song's original lyrics (LRCLIB)."""
+    t = query("SELECT reference_audio FROM track WHERE id=?", (track_id,), one=True)
+    if not t:
+        return redirect(url_for("tracks.library"))
+    if not t["reference_audio"]:
+        flash("Set a cover reference first, then fetch its lyrics.", "error")
+        return redirect(url_for("tracks.detail", track_id=track_id))
+    try:
+        lyrics = generation.fetch_reference_lyrics(t["reference_audio"])
+    except ValueError as exc:
+        flash(f"Couldn't fetch lyrics: {exc}", "error")
+        return redirect(url_for("tracks.detail", track_id=track_id))
+    execute("UPDATE track SET lyrics=? WHERE id=?", (lyrics, track_id))
+    flash("Fetched the original lyrics into the lyrics box.", "ok")
     return redirect(url_for("tracks.detail", track_id=track_id))
 
 

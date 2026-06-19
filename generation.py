@@ -803,6 +803,106 @@ def reference_music_abspath(rel):
     return full if os.path.exists(full) else None
 
 
+def _decode_id3_text(frame):
+    if not frame:
+        return ""
+    enc, raw = frame[0], frame[1:]
+    try:
+        if enc == 1:
+            return raw.decode("utf-16", "replace").split("\x00", 1)[0].strip()
+        if enc == 2:
+            return raw.decode("utf-16-be", "replace").split("\x00", 1)[0].strip()
+        codec = "utf-8" if enc == 3 else "latin-1"
+        return raw.split(b"\x00", 1)[0].decode(codec, "replace").strip()
+    except Exception:
+        return ""
+
+
+def _read_id3_basic(path):
+    """Best-effort artist/title from an MP3's ID3v2 tag (TPE1/TIT2). Stdlib only."""
+    out = {}
+    try:
+        with open(path, "rb") as f:
+            head = f.read(10)
+            if head[:3] != b"ID3":
+                return out
+            ver = head[3]
+            size = ((head[6] & 0x7f) << 21 | (head[7] & 0x7f) << 14
+                    | (head[8] & 0x7f) << 7 | (head[9] & 0x7f))
+            data = f.read(size)
+    except OSError:
+        return out
+    i, n = 0, len(data)
+    while i + 10 <= n:
+        fid = data[i:i + 4]
+        if fid == b"\x00\x00\x00\x00":
+            break
+        if ver >= 4:   # v2.4 frame sizes are synchsafe
+            fsize = ((data[i + 4] & 0x7f) << 21 | (data[i + 5] & 0x7f) << 14
+                     | (data[i + 6] & 0x7f) << 7 | (data[i + 7] & 0x7f))
+        else:          # v2.3 plain big-endian
+            fsize = int.from_bytes(data[i + 4:i + 8], "big")
+        frame = data[i + 10:i + 10 + fsize]
+        i += 10 + fsize
+        if fid == b"TIT2":
+            out["title"] = _decode_id3_text(frame)
+        elif fid == b"TPE1":
+            out["artist"] = _decode_id3_text(frame)
+    return out
+
+
+def _reference_artist_title(reference_rel):
+    """Derive (artist, title) for a reference file from its ID3 tags, else its
+    filename ("Artist - Title")."""
+    abs_path = reference_music_abspath(reference_rel)
+    artist = title = ""
+    if abs_path and abs_path.lower().endswith(".mp3"):
+        tags = _read_id3_basic(abs_path)
+        artist, title = tags.get("artist", ""), tags.get("title", "")
+    if not title:
+        name = os.path.splitext(os.path.basename(reference_rel))[0]
+        if " - " in name:
+            a, t = name.split(" - ", 1)
+            artist = artist or a.strip()
+            title = t.strip()
+        else:
+            title = name.strip()
+    return artist.strip(), title.strip()
+
+
+def fetch_reference_lyrics(reference_rel):
+    """Look up the original song's lyrics from LRCLIB (free, no API key) using
+    the reference's artist/title. Returns plain lyrics text. Raises ValueError
+    if nothing is found or the lookup fails."""
+    import requests
+    artist, title = _reference_artist_title(reference_rel)
+    if not title:
+        raise ValueError("couldn't determine the song title from the reference")
+    headers = {"User-Agent": "MusicWorld (local music-world app)"}
+    try:
+        if artist:
+            r = requests.get("https://lrclib.net/api/get",
+                             params={"artist_name": artist, "track_name": title},
+                             headers=headers, timeout=15)
+            if r.status_code == 200:
+                lyr = (r.json().get("plainLyrics") or "").strip()
+                if lyr:
+                    return lyr
+        q = (artist + " " + title).strip()
+        r = requests.get("https://lrclib.net/api/search", params={"q": q},
+                         headers=headers, timeout=15)
+        r.raise_for_status()
+        for item in r.json() or []:
+            lyr = (item.get("plainLyrics") or "").strip()
+            if lyr:
+                return lyr
+    except requests.RequestException as exc:
+        raise ValueError(f"lyrics lookup failed: {exc}") from exc
+    except ValueError as exc:  # bad JSON
+        raise ValueError(f"lyrics lookup returned an unexpected response: {exc}") from exc
+    raise ValueError(f"no lyrics found for \"{title}\"" + (f" by {artist}" if artist else ""))
+
+
 def create_cover_track(reference_rel, owner_type=None, owner_id=None, notes=""):
     """Write a cover/reinterpretation of a reference track in a performer's style.
 
@@ -1107,9 +1207,13 @@ def render_track(track_id, progress=None, cancel=None):
     execute("UPDATE track SET status='producing' WHERE id=?", (track_id,))
     execute("DELETE FROM candidate WHERE track_id=?", (track_id,))
 
-    # Cover (audio2audio) controls; ref_abs was resolved above.
-    cover_strength = settings.get("acestep_cover_strength")
-    cover_noise = settings.get("acestep_cover_noise")
+    # Cover (audio2audio) controls; ref_abs was resolved above. Per-track values
+    # override the global defaults when set.
+    def _track_or_setting(col, key):
+        v = t[col] if col in t.keys() else None
+        return v if v is not None else settings.get(key)
+    cover_strength = _track_or_setting("cover_strength", "acestep_cover_strength")
+    cover_noise = _track_or_setting("cover_noise", "acestep_cover_noise")
 
     base_seed = t["seed"] or (track_id * 1000)
     best = None

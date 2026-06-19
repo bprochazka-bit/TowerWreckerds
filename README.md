@@ -240,7 +240,10 @@ Mock mode the reference is ignored and a placeholder tone is produced.
 
 You can also attach or change a cover reference on **any existing track** from
 its page (the **Cover reference** panel lists the reference-music files), or set
-it back to none. And any track can be marked **Instrumental** (in its Lyric
+it back to none. There you can set **per-track cover strength/noise** (overriding
+the Admin defaults) and **Fetch original lyrics** — which looks the reference song
+up on [LRCLIB](https://lrclib.net) (free, no key) by its tags/filename and drops
+the original words into the lyrics box, for a faithful same-words cover. And any track can be marked **Instrumental** (in its Lyric
 source panel) to render with no vocals at all (`[Instrumental]`), regardless of
 the lyrics it carries.
 

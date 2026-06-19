@@ -158,8 +158,8 @@
 <div class="panel" style="margin-top:16px">
   <div class="strip-label">Cover reference</div>
   <p class="muted" style="font-size:12px">Attach a song from the reference-music
-    repository to render this track as an <strong>audio2audio cover</strong> of it.
-    Cover strength lives in Admin.</p>
+    repository to render this track as an <strong>audio2audio cover</strong> — it
+    borrows the reference's musical style while singing this track's own lyrics.</p>
   {% if not ref_path %}
     <p class="muted">No reference-music repository configured. Set one in
       <a href="{{ url_for('admin.admin_home') }}">Admin</a>.</p>
@@ -176,8 +176,26 @@
       <option value="{{ track.reference_audio }}" selected>{{ track.reference_audio }} (missing from library)</option>
       {% endif %}
     </select>
+    <div class="field-row" style="margin-top:10px">
+      <div><label>Cover strength <span class="muted">(blank = default {{ cover_defaults.strength }})</span></label>
+        <input type="number" step="0.05" min="0" max="1" name="cover_strength"
+               value="{{ track.cover_strength if track.cover_strength is not none else '' }}"></div>
+      <div><label>Cover noise <span class="muted">(blank = default {{ cover_defaults.noise }})</span></label>
+        <input type="number" step="0.05" min="0" max="1" name="cover_noise"
+               value="{{ track.cover_noise if track.cover_noise is not none else '' }}"></div>
+    </div>
+    <p class="muted" style="font-size:12px;margin-top:6px">Higher strength hugs the
+      reference's style more closely; lower lets the render diverge.</p>
     <div class="btn-row"><button class="btn sm" type="submit">Save reference</button></div>
   </form>
+  {% if track.reference_audio %}
+  <form class="gen-form" data-working="Looking up the original lyrics" method="post"
+        action="{{ url_for('tracks.fetch_lyrics', track_id=track.id) }}" style="margin-top:8px"
+        {% if track.lyrics %}onsubmit="return confirm('Replace the lyrics with the original song\'s lyrics?')"{% endif %}>
+    <button class="btn sm" type="submit">Fetch original lyrics</button>
+    <span class="muted mono" style="font-size:11px;margin-left:8px">from LRCLIB, into the lyrics box</span>
+  </form>
+  {% endif %}
   {% endif %}
 </div>
 

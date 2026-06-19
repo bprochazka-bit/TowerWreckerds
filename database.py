@@ -126,6 +126,8 @@ CREATE TABLE IF NOT EXISTS track (
     lyric_notes TEXT,               -- free-text direction for lyric (re)generation
     instrumental INTEGER DEFAULT 0, -- 1 = render with no vocals ([Instrumental])
     locked INTEGER DEFAULT 0,       -- 1 = pinned: survives album tracklist regeneration
+    cover_strength REAL,            -- per-track audio_cover_strength override (NULL = use global)
+    cover_noise REAL,               -- per-track cover_noise_strength override (NULL = use global)
     status TEXT DEFAULT 'briefed',  -- briefed | producing | rendered | failed | published
     source TEXT DEFAULT 'album',    -- album | freeform | cover
     created_at TEXT,
@@ -507,6 +509,8 @@ MIGRATIONS = [
     ("track", "lyric_notes", "TEXT"),
     ("track", "instrumental", "INTEGER DEFAULT 0"),
     ("track", "locked", "INTEGER DEFAULT 0"),
+    ("track", "cover_strength", "REAL"),
+    ("track", "cover_noise", "REAL"),
     ("release", "cover_path", "TEXT"),
     ("release", "cover_prompt", "TEXT"),
     ("artist", "influences", "TEXT"),
