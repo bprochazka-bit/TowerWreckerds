@@ -72,13 +72,24 @@
   <div class="panel">
     <div class="strip-label">Production brief</div>
     {% if track.summary %}<p>{{ track.summary }}</p>{% endif %}
-    <div class="spec">
-      {% if track.tempo %}<div><span class="k">Tempo</span><span class="v">{{ track.tempo }} bpm</span></div>{% endif %}
-      {% if track.song_key %}<div><span class="k">Key</span><span class="v">{{ track.song_key }}</span></div>{% endif %}
-      {% if track.mood %}<div><span class="k">Mood</span><span class="v">{{ track.mood }}</span></div>{% endif %}
-      {% if track.duration %}<div><span class="k">Length</span><span class="v">{{ '%d:%02d'|format(track.duration // 60, track.duration % 60) }}</span></div>{% endif %}
-      {% if track.seed %}<div><span class="k">Seed</span><span class="v mono">{{ track.seed }}</span></div>{% endif %}
-    </div>
+    <form method="post" action="{{ url_for('tracks.save_brief', track_id=track.id) }}">
+      <div class="field-row-3">
+        <div><label>Tempo <span class="muted">(bpm)</span></label>
+          <input type="number" name="tempo" min="0" max="300" value="{{ track.tempo or '' }}"></div>
+        <div><label>Key</label>
+          <input type="text" name="key" value="{{ track.song_key or '' }}"></div>
+        <div><label>Length <span class="muted">(seconds)</span></label>
+          <input type="number" name="duration" min="8" max="600" value="{{ track.duration or '' }}"></div>
+      </div>
+      <label>Mood</label>
+      <input type="text" name="mood" value="{{ track.mood or '' }}">
+      <div class="btn-row">
+        <button class="btn sm" type="submit">Save brief</button>
+        <span class="muted mono" style="font-size:11px;margin-left:6px">
+          {% if track.duration %}{{ '%d:%02d'|format(track.duration // 60, track.duration % 60) }}{% endif %}
+          {% if track.seed %} · seed {{ track.seed }}{% endif %}</span>
+      </div>
+    </form>
     <div class="strip-label" style="margin-top:14px">Style tags</div>
     <div class="chips chips-edit">
       {% for c in style_tags %}

@@ -240,6 +240,29 @@ def save_lyrics(track_id):
     return redirect(url_for("tracks.detail", track_id=track_id))
 
 
+@bp.route("/<int:track_id>/brief-fields", methods=["POST"])
+def save_brief(track_id):
+    t = query("SELECT tempo, duration FROM track WHERE id=?", (track_id,), one=True)
+    if not t:
+        return redirect(url_for("tracks.library"))
+
+    def _num(name):
+        v = request.form.get(name, "").strip()
+        if not v:
+            return None
+        try:
+            return int(float(v))
+        except ValueError:
+            return None
+
+    duration = _num("duration") or t["duration"] or 180
+    execute("UPDATE track SET tempo=?, song_key=?, mood=?, duration=? WHERE id=?",
+            (_num("tempo"), request.form.get("key", "").strip(),
+             request.form.get("mood", "").strip(), duration, track_id))
+    flash("Production brief saved.", "ok")
+    return redirect(url_for("tracks.detail", track_id=track_id))
+
+
 @bp.route("/<int:track_id>/source", methods=["POST"])
 def save_source(track_id):
     if not query("SELECT 1 FROM track WHERE id=?", (track_id,), one=True):
