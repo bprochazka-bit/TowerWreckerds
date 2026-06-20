@@ -58,6 +58,7 @@ stored list, with surrounding whitespace trimmed and empty entries dropped.
 | `tempo_range`         | string      | no       | Free text, e.g. `"100-140 bpm"`.                   |
 | `common_regions`      | list        | no       | e.g. `["UK", "US"]`.                               |
 | `base_style_tags`     | list        | no       | ACE-Step phrases seeded for this genre.            |
+| `lyric_guidance`      | string      | no       | How lyrics in this genre should read (fed to lyric prompts). |
 
 Records without a non-empty `name` are skipped. Any missing field defaults to an
 empty string / empty list.

@@ -369,6 +369,52 @@ def _lyric_style_line():
     return f"Lyrical style: {s}\n" if s else ""
 
 
+# Built-in per-genre lyric idiom, used when a genre has no custom lyric_guidance.
+_GENRE_LYRIC_DEFAULTS = {
+    "indie rock": "earnest and conversational, specific personal images, wry and understated.",
+    "synthwave": "neon nightscapes, motion and longing, sleek and nostalgic; spare.",
+    "country": "plainspoken narrative with concrete rural detail and a clear story or character.",
+    "hip hop": "rhythmic, dense wordplay and internal rhyme, swagger or sharp social observation.",
+    "r&b": "intimate, sensual and emotionally direct; smooth, repeatable hooks.",
+    "folk": "poetic and imagistic, restrained, a story or parable; few words, well chosen.",
+    "metal": "intense and visceral, dark or mythic themes, forceful imagery.",
+    "jazz": "sophisticated and allusive, mood over plot, loose phrasing.",
+    "electronic": "minimal and hypnotic; repeated phrases used as texture more than narrative.",
+    "pop": "catchy and direct — one clear hook and feeling, economical.",
+}
+
+
+def _genre_lyric_guidance(name):
+    """Per-genre lyric idiom: the genre's own `lyric_guidance`, else a built-in
+    default for known genres, else ''."""
+    name = (name or "").strip()
+    if not name:
+        return ""
+    r = query("SELECT lyric_guidance FROM genre WHERE name = ? COLLATE NOCASE", (name,), one=True)
+    g = (r["lyric_guidance"] if r and "lyric_guidance" in r.keys() else "") or ""
+    return g.strip() or _GENRE_LYRIC_DEFAULTS.get(name.lower(), "")
+
+
+def _lyric_guidance_block(genre_name="", duration=None):
+    """The tunable lyric guidance appended to lyric prompts: genre idiom, the
+    global voice/tone and structure settings, and a proportional-length hint."""
+    parts = []
+    gi = _genre_lyric_guidance(genre_name)
+    if gi:
+        parts.append(f"Genre idiom — {genre_name}: {gi}")
+    s = all_settings()
+    style = (s.get("lyrics_style") or "").strip()
+    if style:
+        parts.append(f"Voice & tone: {style}")
+    struct = (s.get("lyrics_structure") or "").strip()
+    if struct:
+        parts.append(f"Structure & length: {struct}")
+    if duration:
+        parts.append(f"Target length: about {int(duration)} seconds of music — keep the "
+                     "lyric proportional to that; don't overwrite or pad.")
+    return ("\n".join(parts) + "\n") if parts else ""
+
+
 def _strip_lyric_directives(lyrics):
     """Remove parenthetical stage directions/ad-libs from lyrics before they go
     to ACE-Step, which otherwise sings them. Square-bracket [section] structure
@@ -577,14 +623,15 @@ Existing style cues: {jload(t['style_tags'])}
 Genre: {genre}
 
 Return JSON with keys:
-  lyrics (full lyrics with [verse]/[chorus] section tags suitable for a singer),
+  lyrics (the song's lyrics with [verse]/[chorus] section tags),
   style_tags (array of concise production/style descriptors),
   tempo (bpm int), key (musical key), mood,
   environmentals (array, e.g. room, reverb, tape, vinyl crackle),
   duration_seconds (int).
-Lyrics must fit the subject and the artist's voice.
+Write the lyrics in this artist's voice (draw on the persona above) and the
+{genre} idiom — specific to the subject, not generic or formulaic.
 
-{_lyric_style_line()}{LYRIC_RULES}
+{_lyric_guidance_block(genre, t['duration'])}{LYRIC_RULES}
 """
     data = llm.generate_json(user, system=system)
     base_cues = jload(t["style_tags"], [])
@@ -614,11 +661,12 @@ def regenerate_lyrics(track_id):
     if "instrumental" in t.keys() and t["instrumental"]:
         raise LLMError("This track is an instrumental — it has no lyrics.")
     ctx = ""
+    genre = ""
     if t["release_id"]:
         rel = query("SELECT owner_type, owner_id FROM release WHERE id = ?",
                     (t["release_id"],), one=True)
         if rel:
-            ctx, _ = _owner_context(rel["owner_type"], rel["owner_id"], for_lyrics=True)
+            ctx, genre = _owner_context(rel["owner_type"], rel["owner_id"], for_lyrics=True)
     notes = (t["lyric_notes"] or "").strip() if "lyric_notes" in t.keys() else ""
     cues = ", ".join(jload(t["style_tags"], []))
     system = "You are a songwriter writing lyrics to fit a track brief."
@@ -630,10 +678,11 @@ Mood: {t['mood'] or '(unspecified)'} | tempo: {t['tempo'] or '?'} bpm
 Style cues: {cues or '(none)'}
 {('Lyric direction: ' + notes) if notes else ''}
 
-Write the full lyrics with [verse]/[chorus] section tags. Return JSON with a
+Write the lyrics with [verse]/[chorus] section tags, in this performer's voice
+and the {genre or 'song'}'s idiom — specific, not generic. Return JSON with a
 single key "lyrics" whose value is the lyric text.
 
-{_lyric_style_line()}{LYRIC_RULES}
+{_lyric_guidance_block(genre, t['duration'])}{LYRIC_RULES}
 """
     data = llm.generate_json(user, system=system)
     if isinstance(data, dict):
@@ -753,9 +802,10 @@ def create_freeform_track(prompt, owner_type=None, owner_id=None):
     """Build a standalone track from a free-text prompt."""
     llm = LLMClient()
     ctx = ""
+    genre = ""
     refinement = 0.5
     if owner_type and owner_id:
-        ctx, _ = _owner_context(owner_type, owner_id, for_lyrics=True)
+        ctx, genre = _owner_context(owner_type, owner_id, for_lyrics=True)
         refinement = _owner_refinement(owner_type, owner_id)
     system = "You turn a loose idea into a complete, recordable song brief."
     ctx_block = f"Performer context:\n{ctx}\n" if ctx else ""
@@ -766,8 +816,10 @@ Return JSON with keys:
   lyrics (with [verse]/[chorus] tags),
   style_tags (array), tempo (bpm int), key, mood,
   environmentals (array), duration_seconds (int).
+Write the lyrics specific to the idea and{f" the {genre} idiom and" if genre else ""}
+the performer's voice — not generic or formulaic.
 
-{_lyric_style_line()}{LYRIC_RULES}
+{_lyric_guidance_block(genre)}{LYRIC_RULES}
 """
     data = llm.generate_json(user, system=system)
     final_tags = _aslist(data.get("style_tags")) + _refinement_tags(refinement)
@@ -966,9 +1018,10 @@ def create_cover_track(reference_rel, owner_type=None, owner_id=None, notes=""):
     llm = LLMClient()
     ref_title = os.path.splitext(os.path.basename(reference_rel))[0]
     ctx = ""
+    genre = ""
     refinement = 0.5
     if owner_type and owner_id:
-        ctx, _ = _owner_context(owner_type, owner_id, for_lyrics=True)
+        ctx, genre = _owner_context(owner_type, owner_id, for_lyrics=True)
         refinement = _owner_refinement(owner_type, owner_id)
 
     # Prefer the original song's real lyrics; only generate when none are found.
@@ -994,7 +1047,7 @@ def create_cover_track(reference_rel, owner_type=None, owner_id=None, notes=""):
                 "  lyrics (with [verse]/[chorus] tags; the song's own words),\n"
                 "  style_tags (array), tempo (bpm int), key, mood,\n"
                 "  environmentals (array), duration_seconds (int).")
-        rules = f"\n{_lyric_style_line()}{LYRIC_RULES}"
+        rules = f"\n{_lyric_guidance_block(genre)}{LYRIC_RULES}"
     user = f"""{ctx_block}Style reference (for vibe/production feel only): "{ref_title}"
 {('Direction: ' + notes) if notes else ''}
 

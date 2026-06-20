@@ -37,6 +37,9 @@
     <input type="text" name="base_style_tags"
            value="{{ genre.base_style_tags|jload|join(', ') }}">
 
+    <label>Lyric guidance <span class="muted">(how lyrics in this genre should read)</span></label>
+    <textarea name="lyric_guidance" rows="2">{{ genre.lyric_guidance or '' }}</textarea>
+
     <div class="btn-row">
       <button class="btn primary" type="submit">Save genre</button>
       <a class="btn ghost" href="{{ url_for('admin.admin_home') }}#taxonomy">Cancel</a>

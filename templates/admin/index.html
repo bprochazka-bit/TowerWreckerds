@@ -42,12 +42,17 @@
                  value="{{ settings.llm_max_tokens }}"></div>
       </div>
 
-      <label>Lyric style guidance</label>
+      <label>Lyric style guidance <span class="muted">(voice & tone)</span></label>
       <textarea name="lyrics_style" rows="3"
         placeholder="How lyrics should read — e.g. poetic and image-driven vs literal storytelling">{{ settings.lyrics_style }}</textarea>
-      <p class="muted" style="font-size:12px;margin-top:6px">Added to every lyric
-        prompt (initial brief and Regenerate lyrics). Raise Temperature for more
-        variation between runs — lyric generation isn't seeded.</p>
+
+      <label>Lyric structure &amp; length</label>
+      <textarea name="lyrics_structure" rows="3"
+        placeholder="Section/length guidance — e.g. keep it tight, no tacked-on outro, avoid filler/repetition">{{ settings.lyrics_structure }}</textarea>
+      <p class="muted" style="font-size:12px;margin-top:6px">Both are added to every
+        lyric prompt (brief, freeform, cover, Regenerate lyrics), alongside the
+        per-genre idiom and a length hint from the track duration. Raise Temperature
+        for more variation between runs — lyric generation isn't seeded.</p>
 
       <div class="btn-row">
         <button class="btn ghost sm" type="button"
@@ -211,6 +216,7 @@
       <input type="text" name="descriptors" placeholder="descriptors, comma separated">
       <input type="text" name="typical_instruments" placeholder="typical instruments, comma separated">
       <input type="text" name="base_style_tags" placeholder="base style tags, comma separated">
+      <input type="text" name="lyric_guidance" placeholder="lyric idiom (how lyrics in this genre should read)">
       <div class="btn-row"><button class="btn sm" type="submit">Add genre</button></div>
     </form>
 

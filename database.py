@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS genre (
     typical_instruments TEXT,    -- json list
     tempo_range TEXT,
     common_regions TEXT,         -- json list
-    base_style_tags TEXT         -- json list
+    base_style_tags TEXT,        -- json list
+    lyric_guidance TEXT          -- how lyrics in this genre should read
 );
 
 CREATE TABLE IF NOT EXISTS style_tag (
@@ -221,6 +222,11 @@ DEFAULT_SETTINGS = {
     "lyrics_style": ("Favor poetic, evocative, image-driven lyrics — lean on "
                      "metaphor, mood, and sensory detail rather than literal, "
                      "blow-by-blow storytelling."),
+    # Global structure/length guidance for lyrics.
+    "lyrics_structure": ("Keep it tight and proportional to the song's length. Use "
+                         "only the sections the song needs (often verse / chorus / "
+                         "verse / chorus / bridge). Don't tack on an outro, and "
+                         "avoid filler lines, clichés, and needless repetition."),
     "mock_mode": "1",                     # 1 = synthesize placeholders, no live backends
     # Reference-music repository: a folder of existing audio used as a reference
     # when generating cover versions of songs.
@@ -297,6 +303,7 @@ def upsert_genre(data, genre_id=None):
         "tempo_range": (data.get("tempo_range") or "").strip(),
         "common_regions": jdump(coerce_str_list(data.get("common_regions"))),
         "base_style_tags": jdump(coerce_str_list(data.get("base_style_tags"))),
+        "lyric_guidance": (data.get("lyric_guidance") or "").strip(),
     }
     row = None
     if genre_id is not None:
@@ -308,16 +315,18 @@ def upsert_genre(data, genre_id=None):
     if row is not None:
         execute(
             "UPDATE genre SET name=?, description=?, descriptors=?, typical_instruments=?,"
-            " tempo_range=?, common_regions=?, base_style_tags=? WHERE id=?",
+            " tempo_range=?, common_regions=?, base_style_tags=?, lyric_guidance=? WHERE id=?",
             (name, cols["description"], cols["descriptors"], cols["typical_instruments"],
-             cols["tempo_range"], cols["common_regions"], cols["base_style_tags"], row["id"]),
+             cols["tempo_range"], cols["common_regions"], cols["base_style_tags"],
+             cols["lyric_guidance"], row["id"]),
         )
         return "updated"
     execute(
         "INSERT INTO genre (name, description, descriptors, typical_instruments,"
-        " tempo_range, common_regions, base_style_tags) VALUES (?,?,?,?,?,?,?)",
+        " tempo_range, common_regions, base_style_tags, lyric_guidance) VALUES (?,?,?,?,?,?,?,?)",
         (name, cols["description"], cols["descriptors"], cols["typical_instruments"],
-         cols["tempo_range"], cols["common_regions"], cols["base_style_tags"]),
+         cols["tempo_range"], cols["common_regions"], cols["base_style_tags"],
+         cols["lyric_guidance"]),
     )
     return "added"
 
@@ -370,6 +379,7 @@ def export_genres():
             "tempo_range": r["tempo_range"] or "",
             "common_regions": jload(r["common_regions"], []),
             "base_style_tags": jload(r["base_style_tags"], []),
+            "lyric_guidance": (r["lyric_guidance"] if "lyric_guidance" in r.keys() else "") or "",
         })
     return out
 
@@ -521,6 +531,7 @@ MIGRATIONS = [
     ("artist", "portrait_prompt", "TEXT"),
     ("band", "portrait_path", "TEXT"),
     ("band", "portrait_prompt", "TEXT"),
+    ("genre", "lyric_guidance", "TEXT"),
 ]
 
 

@@ -20,7 +20,7 @@ bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 SETTING_KEYS = [
     "llm_backend", "llm_base_url", "llm_model", "llm_api_key",
-    "llm_temperature", "llm_max_tokens", "lyrics_style",
+    "llm_temperature", "llm_max_tokens", "lyrics_style", "lyrics_structure",
     "acestep_base_url", "acestep_candidates", "acestep_duration_ceiling",
     "acestep_format", "acestep_trim_noise",
     "acestep_cover_strength", "acestep_cover_noise", "lyrics_strip_parentheticals",
@@ -107,6 +107,7 @@ def _genre_form_data():
         "tempo_range": request.form.get("tempo_range", ""),
         "common_regions": request.form.get("common_regions", ""),
         "base_style_tags": request.form.get("base_style_tags", ""),
+        "lyric_guidance": request.form.get("lyric_guidance", ""),
     }
 
 

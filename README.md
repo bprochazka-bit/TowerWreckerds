@@ -175,13 +175,22 @@ a **Trim trailing noise** button to clean up tracks that were rendered earlier.
 ### Lyric style and regeneration
 
 Lyric generation is **not seeded** — it comes from the language model, so it
-varies each run (raise *Temperature* in Admin for more variation). Two levers
-shape it: a global **Lyric style guidance** in Admin (defaults to favouring
-poetic, image-driven lyrics over literal storytelling), added to every lyric
-prompt; and a per-track **Lyric source** panel where you edit the subject,
-summary, and a free-text **lyric direction**, then hit **Regenerate lyrics** to
-rewrite *only* the lyrics from those inputs — tempo, key, and tags are left
-untouched.
+varies each run (raise *Temperature* in Admin for more variation). Several levers
+shape every lyric prompt:
+
+- **Lyric style guidance** (Admin) — voice & tone; defaults to favouring poetic,
+  image-driven lyrics over literal storytelling.
+- **Lyric structure & length** (Admin) — keeps songs tight and proportional, and
+  discourages tacked-on outros, filler, and repetition.
+- **Per-genre lyric guidance** — each genre carries a lyric *idiom* (built-in
+  defaults for the seed genres, editable per genre and importable), so country
+  reads like country and hip hop like hip hop. The track's genre idiom is injected
+  automatically.
+- **Track length** — the duration is passed in as a proportional-length hint, so a
+  short song doesn't get five verses and an outro.
+- **Per-track lyric direction** — the track's **Lyric source** panel takes a
+  free-text direction; **Regenerate lyrics** rewrites *only* the lyrics from the
+  subject, summary, direction, genre, and length — tempo, key, and tags untouched.
 
 ### Clean lyrics
 
