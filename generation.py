@@ -415,6 +415,45 @@ def _lyric_guidance_block(genre_name="", duration=None):
     return ("\n".join(parts) + "\n") if parts else ""
 
 
+def _lyrics_temperature():
+    """Temperature for the dedicated lyric pass (separate from the structured
+    brief, which uses the global LLM temperature)."""
+    try:
+        return float(all_settings().get("lyrics_temperature", 0.95))
+    except (TypeError, ValueError):
+        return 0.95
+
+
+def _write_lyrics(ctx, genre, title, role="", subject="", summary="", mood="",
+                  tempo=None, style_cues=None, notes="", duration=None):
+    """Generate just the lyrics in a focused call at the lyric temperature, so
+    the words can run creative while the structured brief stays calm and parses."""
+    llm = LLMClient()
+    if isinstance(style_cues, str):
+        cues = style_cues
+    else:
+        cues = ", ".join(style_cues or [])
+    system = "You are a songwriter writing lyrics to fit a track brief."
+    user = f"""{ctx}
+Track: "{title}"{f" (role: {role})" if role else ''}
+Subject: {subject or '(none)'}
+Summary: {summary or '(none)'}
+Mood: {mood or '(unspecified)'} | tempo: {tempo or '?'} bpm
+Style cues: {cues or '(none)'}
+{('Lyric direction: ' + notes) if notes else ''}
+
+Write the lyrics with [verse]/[chorus] section tags, in this performer's voice
+and the {genre or 'song'}'s idiom — specific, not generic. Return JSON with a
+single key "lyrics" whose value is the lyric text.
+
+{_lyric_guidance_block(genre, duration)}{LYRIC_RULES}
+"""
+    data = llm.generate_json(user, system=system, temperature=_lyrics_temperature())
+    if isinstance(data, dict):
+        return _lyrics_text(data.get("lyrics") or data.get("text") or "")
+    return data if isinstance(data, str) else ""
+
+
 def _strip_lyric_directives(lyrics):
     """Remove parenthetical stage directions/ad-libs from lyrics before they go
     to ACE-Step, which otherwise sings them. Square-bracket [section] structure
@@ -622,30 +661,33 @@ Summary so far: {t['summary']}
 Existing style cues: {jload(t['style_tags'])}
 Genre: {genre}
 
-Return JSON with keys:
-  lyrics (the song's lyrics with [verse]/[chorus] section tags),
+Return JSON with keys (no lyrics — those are written separately):
   style_tags (array of concise production/style descriptors),
   tempo (bpm int), key (musical key), mood,
   environmentals (array, e.g. room, reverb, tape, vinyl crackle),
   duration_seconds (int).
-Write the lyrics in this artist's voice (draw on the persona above) and the
-{genre} idiom — specific to the subject, not generic or formulaic.
-
-{_lyric_guidance_block(genre, t['duration'])}{LYRIC_RULES}
 """
     data = llm.generate_json(user, system=system)
     base_cues = jload(t["style_tags"], [])
     final_tags = base_cues + _aslist(data.get("style_tags")) + _refinement_tags(refinement)
-    # Instrumentals carry no written lyrics; covers do (sung over the source style).
+    mood = _text(data.get("mood", t["mood"]))
+    tempo = _intval(data.get("tempo"), t["tempo"])
+    duration = _intval(data.get("duration_seconds"), t["duration"])
+    # Instrumentals carry no written lyrics; otherwise write them in a focused,
+    # creative-temperature pass.
     no_lyrics = bool(t["instrumental"]) if "instrumental" in t.keys() else False
-    lyrics_out = "" if no_lyrics else _lyrics_text(data.get("lyrics", ""))
+    notes = (t["lyric_notes"] or "").strip() if "lyric_notes" in t.keys() else ""
+    lyrics_out = "" if no_lyrics else _write_lyrics(
+        ctx, genre, t["title"], role=t["role"], subject=t["subject"],
+        summary=t["summary"], mood=mood, tempo=tempo, style_cues=final_tags,
+        notes=notes, duration=duration)
     execute(
         "UPDATE track SET lyrics=?, style_tags=?, tempo=?, song_key=?, mood=?,"
         " environmentals=?, duration=?, status='briefed' WHERE id=?",
-        (lyrics_out, jdump(final_tags), _intval(data.get("tempo"), t["tempo"]),
-         _text(data.get("key", "")), _text(data.get("mood", t["mood"])),
+        (lyrics_out, jdump(final_tags), tempo,
+         _text(data.get("key", "")), mood,
          jdump(_aslist(data.get("environmentals"))),
-         _intval(data.get("duration_seconds"), t["duration"]), track_id),
+         duration, track_id),
     )
     return track_id
 
@@ -653,8 +695,7 @@ Write the lyrics in this artist's voice (draw on the persona above) and the
 def regenerate_lyrics(track_id):
     """Rewrite ONLY the lyrics for a track, from its subject/summary/style and an
     optional lyric direction — leaving tempo, key, style tags, etc. untouched.
-    Honors the global lyric-style setting."""
-    llm = LLMClient()
+    Runs at the lyric temperature."""
     t = query("SELECT * FROM track WHERE id = ?", (track_id,), one=True)
     if not t:
         raise ValueError("track not found")
@@ -668,27 +709,10 @@ def regenerate_lyrics(track_id):
         if rel:
             ctx, genre = _owner_context(rel["owner_type"], rel["owner_id"], for_lyrics=True)
     notes = (t["lyric_notes"] or "").strip() if "lyric_notes" in t.keys() else ""
-    cues = ", ".join(jload(t["style_tags"], []))
-    system = "You are a songwriter writing lyrics to fit a track brief."
-    user = f"""{ctx}
-Track: "{t['title']}"{f" (role: {t['role']})" if t['role'] else ''}
-Subject: {t['subject'] or '(none)'}
-Summary: {t['summary'] or '(none)'}
-Mood: {t['mood'] or '(unspecified)'} | tempo: {t['tempo'] or '?'} bpm
-Style cues: {cues or '(none)'}
-{('Lyric direction: ' + notes) if notes else ''}
-
-Write the lyrics with [verse]/[chorus] section tags, in this performer's voice
-and the {genre or 'song'}'s idiom — specific, not generic. Return JSON with a
-single key "lyrics" whose value is the lyric text.
-
-{_lyric_guidance_block(genre, t['duration'])}{LYRIC_RULES}
-"""
-    data = llm.generate_json(user, system=system)
-    if isinstance(data, dict):
-        lyrics = _lyrics_text(data.get("lyrics") or data.get("text") or "")
-    else:
-        lyrics = data if isinstance(data, str) else ""
+    lyrics = _write_lyrics(
+        ctx, genre, t["title"], role=t["role"], subject=t["subject"],
+        summary=t["summary"], mood=t["mood"], tempo=t["tempo"],
+        style_cues=jload(t["style_tags"], []), notes=notes, duration=t["duration"])
     if not (lyrics or "").strip():
         raise LLMError("model returned no lyrics")
     execute("UPDATE track SET lyrics=? WHERE id=?", (lyrics, track_id))
@@ -811,15 +835,10 @@ def create_freeform_track(prompt, owner_type=None, owner_id=None):
     ctx_block = f"Performer context:\n{ctx}\n" if ctx else ""
     user = f"""{ctx_block}User prompt: {prompt}
 
-Return JSON with keys:
+Return JSON with keys (no lyrics — those are written separately):
   title, subject, summary,
-  lyrics (with [verse]/[chorus] tags),
   style_tags (array), tempo (bpm int), key, mood,
   environmentals (array), duration_seconds (int).
-Write the lyrics specific to the idea and{f" the {genre} idiom and" if genre else ""}
-the performer's voice — not generic or formulaic.
-
-{_lyric_guidance_block(genre)}{LYRIC_RULES}
 """
     data = llm.generate_json(user, system=system)
     final_tags = _aslist(data.get("style_tags")) + _refinement_tags(refinement)
@@ -827,14 +846,21 @@ the performer's voice — not generic or formulaic.
     if owner_type and owner_id:
         final_tags = _apply_vocal_to_tags(final_tags, _owner_vocal(owner_type, owner_id))
     title = _text(data.get("title")) or "Untitled"
+    subject = _text(data.get("subject", ""))
+    summary = _text(data.get("summary", ""))
+    mood = _text(data.get("mood", ""))
+    tempo = _intval(data.get("tempo"))
+    duration = _intval(data.get("duration_seconds"), 180)
+    lyrics = _write_lyrics(ctx, genre, title, subject=subject, summary=summary,
+                           mood=mood, tempo=tempo, style_cues=final_tags,
+                           duration=duration)
     tid = execute(
         "INSERT INTO track (position, role, title, subject, summary, lyrics, style_tags,"
         " tempo, song_key, mood, environmentals, duration, influences, status, source, created_at)"
         " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (1, "single", title, _text(data.get("subject", "")),
-         _text(data.get("summary", "")), _lyrics_text(data.get("lyrics", "")), jdump(final_tags),
-         _intval(data.get("tempo")), _text(data.get("key", "")), _text(data.get("mood", "")),
-         jdump(_aslist(data.get("environmentals"))), _intval(data.get("duration_seconds"), 180),
+        (1, "single", title, subject, summary, lyrics, jdump(final_tags),
+         tempo, _text(data.get("key", "")), mood,
+         jdump(_aslist(data.get("environmentals"))), duration,
          influence, "briefed", "freeform", now_iso()),
     )
     # Attributing to a performer associates the track with them (as a single).
@@ -1032,31 +1058,17 @@ def create_cover_track(reference_rel, owner_type=None, owner_id=None, notes=""):
         fetched = None
 
     ctx_block = f"Performer context:\n{ctx}\n" if ctx else ""
-    if fetched:
-        system = ("You write a production/style brief for a cover that REUSES the "
-                  "original lyrics. Do not write any lyrics.")
-        keys = ("  title, subject, summary,\n"
-                "  style_tags (array), tempo (bpm int), key, mood,\n"
-                "  environmentals (array), duration_seconds (int).")
-        rules = ""
-    else:
-        system = ("You write an original song performed in the musical STYLE of a "
-                  "reference track (rendered audio2audio). The new song has its own "
-                  "lyrics — it is not a re-recording of the reference.")
-        keys = ("  title, subject, summary,\n"
-                "  lyrics (with [verse]/[chorus] tags; the song's own words),\n"
-                "  style_tags (array), tempo (bpm int), key, mood,\n"
-                "  environmentals (array), duration_seconds (int).")
-        rules = f"\n{_lyric_guidance_block(genre)}{LYRIC_RULES}"
+    system = ("You write a production/style brief for an original song to be "
+              "performed in the musical STYLE of a reference track (audio2audio).")
     user = f"""{ctx_block}Style reference (for vibe/production feel only): "{ref_title}"
 {('Direction: ' + notes) if notes else ''}
 
-Return JSON with keys:
-{keys}
-{rules}
+Return JSON with keys (no lyrics — those are handled separately):
+  title, subject, summary,
+  style_tags (array), tempo (bpm int), key, mood,
+  environmentals (array), duration_seconds (int).
 """
     data = llm.generate_json(user, system=system)
-    lyrics_out = fetched if fetched else _lyrics_text(data.get("lyrics", ""))
     final_tags = _aslist(data.get("style_tags")) + _refinement_tags(refinement)
     influence = _owner_influences(owner_type, owner_id) if (owner_type and owner_id) else ""
     if owner_type and owner_id:
@@ -1064,15 +1076,23 @@ Return JSON with keys:
     # Name the cover after the original song: "Original Title (Cover)".
     _, orig_title = _reference_artist_title(reference_rel)
     title = f"{(orig_title or ref_title).strip()} (Cover)"
+    subject = _text(data.get("subject", ""))
+    summary = _text(data.get("summary", ""))
+    mood = _text(data.get("mood", ""))
+    tempo = _intval(data.get("tempo"))
+    duration = _intval(data.get("duration_seconds"), 180)
+    # Use the original's real lyrics if found, else write fresh ones in a pass.
+    lyrics_out = fetched if fetched else _write_lyrics(
+        ctx, genre, title, subject=subject, summary=summary, mood=mood,
+        tempo=tempo, style_cues=final_tags, notes=notes, duration=duration)
     tid = execute(
         "INSERT INTO track (position, role, title, subject, summary, lyrics, style_tags,"
         " tempo, song_key, mood, environmentals, duration, reference_audio, influences,"
         " status, source, created_at)"
         " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (1, "cover", title, _text(data.get("subject", "")),
-         _text(data.get("summary", "")), lyrics_out, jdump(final_tags),
-         _intval(data.get("tempo")), _text(data.get("key", "")), _text(data.get("mood", "")),
-         jdump(_aslist(data.get("environmentals"))), _intval(data.get("duration_seconds"), 180),
+        (1, "cover", title, subject, summary, lyrics_out, jdump(final_tags),
+         tempo, _text(data.get("key", "")), mood,
+         jdump(_aslist(data.get("environmentals"))), duration,
          reference_rel, influence, "briefed", "cover", now_iso()),
     )
     # Attributing to a performer associates the cover with them (as a single).

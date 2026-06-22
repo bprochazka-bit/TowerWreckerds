@@ -206,6 +206,7 @@ DEFAULT_SETTINGS = {
     "llm_model": "default",
     "llm_api_key": "",
     "llm_temperature": "0.8",
+    "lyrics_temperature": "0.95",         # creative temp for the dedicated lyric pass
     "llm_max_tokens": "4096",
     "acestep_base_url": "http://localhost:8765",
     "acestep_candidates": "3",

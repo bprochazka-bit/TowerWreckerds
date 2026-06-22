@@ -80,7 +80,8 @@ MUSIC_WORLD_HOST=0.0.0.0 MUSIC_WORLD_PORT=8000 ./run.sh
 
 Open **Admin** in the app and set the LLM backend. Three backend types are
 supported; all are configured the same way (base URL, optional model name,
-optional API key).
+optional API key). For recommended local models (Qwen3 MoE, Hermes 4) and
+download/run instructions, see **[docs/llm-setup.md](docs/llm-setup.md)**.
 
 | Backend     | Wire format                         | Typical base URL          |
 |-------------|-------------------------------------|---------------------------|
@@ -178,6 +179,9 @@ Lyric generation is **not seeded** — it comes from the language model, so it
 varies each run (raise *Temperature* in Admin for more variation). Several levers
 shape every lyric prompt:
 
+- **Lyric temperature** (Admin) — lyrics are written in a *separate* pass from the
+  structured brief, so you can run the words hotter (more creative) while the brief
+  JSON stays at the calmer base temperature.
 - **Lyric style guidance** (Admin) — voice & tone; defaults to favouring poetic,
   image-driven lyrics over literal storytelling.
 - **Lyric structure & length** (Admin) — keeps songs tight and proportional, and

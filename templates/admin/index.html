@@ -33,14 +33,21 @@
       <input type="password" name="llm_api_key" value="{{ settings.llm_api_key }}"
              placeholder="optional — local servers usually need none">
 
-      <div class="field-row">
+      <div class="field-row-3">
         <div><label>Temperature</label>
           <input type="number" step="0.05" min="0" max="2" name="llm_temperature"
                  value="{{ settings.llm_temperature }}"></div>
+        <div><label>Lyric temperature</label>
+          <input type="number" step="0.05" min="0" max="2" name="lyrics_temperature"
+                 value="{{ settings.lyrics_temperature }}"></div>
         <div><label>Max tokens</label>
           <input type="number" min="64" max="8192" name="llm_max_tokens"
                  value="{{ settings.llm_max_tokens }}"></div>
       </div>
+      <p class="muted" style="font-size:12px;margin-top:4px">Lyrics are written in
+        a separate pass at <strong>Lyric temperature</strong> (run it hotter for
+        more creative words), while the structured brief uses the base Temperature
+        so the JSON stays clean.</p>
 
       <label>Lyric style guidance <span class="muted">(voice & tone)</span></label>
       <textarea name="lyrics_style" rows="3"
