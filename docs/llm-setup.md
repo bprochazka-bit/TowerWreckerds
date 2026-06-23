@@ -68,11 +68,13 @@ huggingface-cli download bartowski/NousResearch_Hermes-4.3-36B-GGUF \
 ```
 
 Serve it (OpenAI-compatible API on :8080; `-ngl 99` offloads all layers to the
-iGPU via unified memory):
+iGPU via unified memory; `--jinja` applies the model's own chat template so the
+"disable thinking" flag works):
 
 ```bash
 ./build/bin/llama-server -m ./models/qwen3-30b-a3b/*Q6_K*.gguf \
-  -c 8192 -ngl 99 --host 0.0.0.0 --port 8080
+  -c 8192 -ngl 99 --jinja --host 0.0.0.0 --port 8080
+# Hermes 4 (hybrid reasoning): add --reasoning-budget 0 to keep it from "thinking".
 ```
 
 In **Admin → Language model**:
@@ -90,9 +92,10 @@ In **Admin → Language model**:
   you can run them hotter for creative words without breaking JSON.
 - **Max tokens ≥ 4096** — a brief + lyrics is large; truncation looks like short
   or broken lyrics.
-- **Turn off "thinking."** The app already requests it, but the cleanest path is
-  a **non-thinking** build (Qwen3 *Instruct‑2507*); for hybrid models you can also
-  append `/no_think` to prompts or disable reasoning in the model's options.
+- **Turn off "thinking."** The app already requests it (and needs `llama-server
+  --jinja` for that flag to apply), but the cleanest path is a **non-thinking**
+  build (Qwen3 *Instruct‑2507*); for hybrid models (Hermes 4) start `llama-server`
+  with `--reasoning-budget 0`, or append `/no_think` to prompts.
 
 See the **Lyric style / structure / per-genre idiom** controls in Admin and on the
 track page for steering *what* the lyrics say (separate from which model writes them).
