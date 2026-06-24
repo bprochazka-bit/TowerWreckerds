@@ -520,7 +520,10 @@ _TRACK_KEYS_DOC = """     position (int, 1-based),
      style_cues (array of short production/style descriptors),
      tempo (bpm int),
      mood,
-     length_seconds (int, 90-300)."""
+     length_seconds (int, 90-300),
+     lyric_direction (one or two sentences guiding the lyrics for this track —
+        angle, perspective, recurring image/refrain, structure or tone — grounded
+        in the album's concept/ethos and the artist; not the lyrics themselves)."""
 
 
 def _insert_tracklist(rid, tracks, position_from=None):
@@ -529,12 +532,13 @@ def _insert_tracklist(rid, tracks, position_from=None):
         pos = (position_from + i) if position_from is not None else _intval(t.get("position"), i + 1)
         execute(
             "INSERT INTO track (release_id, position, role, title, subject, summary,"
-            " style_tags, tempo, mood, duration, status, source, created_at)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " style_tags, tempo, mood, duration, lyric_notes, status, source, created_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (rid, pos, _text(t.get("role", "")), _text(t.get("title", "Untitled")),
              _text(t.get("subject", "")), _text(t.get("summary", "")), jdump(cues),
              _intval(t.get("tempo")), _text(t.get("mood", "")),
              _intval(t.get("length_seconds"), 180),
+             _text(t.get("lyric_direction", "")),
              "briefed", "album", now_iso()),
         )
 

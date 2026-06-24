@@ -30,7 +30,9 @@ The app has four authoring sections plus an admin console.
    to use the performer's name), and afterwards **edit the title, inspiration,
    and ethos** and hit **Regenerate tracklist** to rebuild the sequence from the
    edited inspiration. Every track comes with a role, subject, summary, tempo,
-   mood, length, and stylistic cues. You can also **compose an album by hand**:
+   mood, length, stylistic cues, and a **lyric direction** (grounded in the
+   concept/ethos and the artist) that pre-fills its Lyric direction field to steer
+   the lyrics. You can also **compose an album by hand**:
    start an empty release, write tracks individually, then **add** them, **reorder**
    (move up/down), and **lock** a track so it survives a tracklist regeneration
    (locked tracks are kept and only the rest are replaced/filled). Removing a track
