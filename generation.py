@@ -562,13 +562,16 @@ def generate_album(owner_type, owner_id, ethos, style_tags, rel_type="album",
         "You are an A&R producer shaping a cohesive release. Build a tracklist with "
         "a real emotional arc, not a random list. Each track has a clear job."
     )
+    language = _owner_language(owner_type, owner_id)
+    lang_line = (f"\nWrite the title, concept, inspiration, and every track's "
+                 f"title/subject/summary in {language}.") if language else ""
     user = f"""Design a {rel_type} for:
 {ctx}
 
 Ethos / concept brief from the user: {ethos or "(none given — derive from the artist)"}
 Requested style tags: {tag_str}
 Primary genre: {genre}
-{title_line}
+{title_line}{lang_line}
 
 Return JSON with keys:
   title, concept, inspiration,
@@ -622,6 +625,9 @@ def regenerate_tracklist(album_id):
             "keeping its title, concept, and inspiration intact while giving it a fresh, "
             "coherent sequence with a real emotional arc."
         )
+        language = _owner_language(rel["owner_type"], rel["owner_id"])
+        lang_line = (f"\nWrite every track's title/subject/summary in {language}."
+                     if language else "")
         user = f"""Rebuild the tracklist for this {rel['type']}:
 {ctx}
 
@@ -630,7 +636,7 @@ Concept: {rel['concept'] or '(none)'}
 Inspiration: {rel['inspiration'] or '(none)'}
 Ethos: {rel['ethos'] or '(none)'}
 Style tags: {tag_str}
-Primary genre: {genre}
+Primary genre: {genre}{lang_line}
 {locked_block}
 Return JSON with key:
   tracks: array of exactly {n_new} objects, each with keys:

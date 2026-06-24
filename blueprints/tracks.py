@@ -181,12 +181,16 @@ def detail(track_id):
     if not release:
         assign_artists = query("SELECT id, name FROM artist ORDER BY name")
         assign_bands = query("SELECT id, name FROM band ORDER BY name")
+    owner_language = ""
+    if release:
+        owner_language = generation._owner_language(release["owner_type"], release["owner_id"])
     return render_template("tracks/detail.html", track=track, release=release,
                            candidates=candidates,
                            style_tags=jload(track["style_tags"]),
                            environmentals=jload(track["environmentals"]),
                            tag_options=tag_options, references=references,
                            ref_path=ref_path, cover_defaults=cover_defaults,
+                           owner_language=owner_language,
                            assign_artists=assign_artists, assign_bands=assign_bands)
 
 
