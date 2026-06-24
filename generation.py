@@ -459,15 +459,24 @@ def _lyrics_temperature():
 
 
 def _write_lyrics(ctx, genre, title, role="", subject="", summary="", mood="",
-                  tempo=None, style_cues=None, notes="", duration=None, language=""):
+                  tempo=None, style_cues=None, notes="", duration=None, language="",
+                  vary=False):
     """Generate just the lyrics in a focused call at the lyric temperature, so
-    the words can run creative while the structured brief stays calm and parses."""
+    the words can run creative while the structured brief stays calm and parses.
+
+    `vary` is set when this is an explicit *re*generation: it adds a 'fresh take'
+    directive and a variation token so the new lyrics genuinely differ from the
+    version being replaced rather than reconverging on it."""
     llm = LLMClient()
     if isinstance(style_cues, str):
         cues = style_cues
     else:
         cues = ", ".join(style_cues or [])
     lang_line = (f"Write the lyrics entirely in {language}.\n") if language else ""
+    vary_line = (
+        f"\nWrite a fresh take — different wording, images and hook from any "
+        f"earlier version of this song. (Variation token, ignore its meaning: "
+        f"{_variation_token()})\n") if vary else ""
     system = "You are a songwriter writing lyrics to fit a track brief."
     user = f"""{ctx}
 Track: "{title}"{f" (role: {role})" if role else ''}
@@ -480,7 +489,7 @@ Style cues: {cues or '(none)'}
 {lang_line}Write the lyrics with [verse]/[chorus] section tags, in this performer's voice
 and the {genre or 'song'}'s idiom — specific, not generic. Return JSON with a
 single key "lyrics" whose value is the lyric text.
-
+{vary_line}
 {_lyric_guidance_block(genre, duration)}{LYRIC_RULES}
 """
     data = llm.generate_json(user, system=system, temperature=_lyrics_temperature())
@@ -542,6 +551,15 @@ _NAMING_GUIDANCE = (
     "tech jargon (circuit, signal, protocol, network, upload, decay) unless a song "
     "is truly about that. When unsure, simpler and more emotional beats clever."
 )
+
+
+def _variation_token():
+    """A throwaway token mixed into 'regenerate' prompts so the prompt text
+    itself differs on every click. Identical prompts let a low-entropy request
+    (a short list of track titles) reconverge to the same words even with a new
+    sampler seed; changing one token forces a different decode path. The model is
+    told to ignore its meaning — it only exists to break prompt-identity."""
+    return f"{random.randint(0, 0xFFFFFF):06x}"
 
 
 def _insert_tracklist(rid, tracks, position_from=None):
@@ -644,6 +662,18 @@ def regenerate_tracklist(album_id):
                 for t in locked)
             locked_block = (f"\nThese tracks are FIXED — keep them, do not repeat or "
                             f"duplicate them; write new tracks that complement them:\n{lines}\n")
+        # Show the model the titles it's REPLACING so a regenerate genuinely
+        # diverges instead of reconverging on the same names under a fixed concept.
+        replacing = query(
+            "SELECT title FROM track WHERE release_id=? AND COALESCE(locked,0)=0"
+            " ORDER BY position", (album_id,))
+        avoid_block = ""
+        prior = [t["title"] for t in replacing if (t["title"] or "").strip()]
+        if prior:
+            avoid_block = (
+                "\nThe previous version of this tracklist used these titles. Do NOT "
+                "reuse them or close variants — take a genuinely different angle on "
+                "the same concept:\n" + "\n".join(f"- {p}" for p in prior) + "\n")
         system = (
             "You are an A&R producer rebuilding the tracklist for an existing release, "
             "keeping its title, concept, and inspiration intact while giving it a fresh, "
@@ -661,13 +691,15 @@ Inspiration: {rel['inspiration'] or '(none)'}
 Ethos: {rel['ethos'] or '(none)'}
 Style tags: {tag_str}
 Primary genre: {genre}{lang_line}
-{locked_block}
+{locked_block}{avoid_block}
 Return JSON with key:
   tracks: array of exactly {n_new} objects, each with keys:
 {_TRACK_KEYS_DOC}
 Sequence the roles sensibly.
 
 {_NAMING_GUIDANCE}
+
+(Variation token, ignore its meaning: {_variation_token()})
 """
         data = llm.generate_json(user, system=system, temperature=_lyrics_temperature())
         new_tracks = (data.get("tracks", []) or [])[:n_new]  # never exceed the target
@@ -797,7 +829,7 @@ def regenerate_lyrics(track_id):
         ctx, genre, t["title"], role=t["role"], subject=t["subject"],
         summary=t["summary"], mood=t["mood"], tempo=t["tempo"],
         style_cues=jload(t["style_tags"], []), notes=notes, duration=t["duration"],
-        language=language)
+        language=language, vary=True)
     if not (lyrics or "").strip():
         raise LLMError("model returned no lyrics")
     execute("UPDATE track SET lyrics=? WHERE id=?", (lyrics, track_id))

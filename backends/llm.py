@@ -13,12 +13,15 @@ backend by returning canned structured content.
 """
 
 import json
+import logging
 import random
 import re
 
 import requests
 
 from database import all_settings
+
+logger = logging.getLogger("musicworld.llm")
 
 
 class LLMError(RuntimeError):
@@ -41,6 +44,7 @@ class LLMClient:
         except (TypeError, ValueError):
             self.max_tokens = 1500
         self.system_preamble = (s.get("llm_system_preamble", "") or "").strip()
+        self.last_seed = None  # the seed used by the most recent chat() call
 
     # -- low level -----------------------------------------------------------
 
@@ -50,9 +54,19 @@ class LLMClient:
             h["Authorization"] = f"Bearer {self.api_key}"
         return h
 
-    def chat(self, user, system=None, temperature=None, max_tokens=None, timeout=180):
+    def chat(self, user, system=None, temperature=None, max_tokens=None, timeout=180,
+             seed=None):
         temperature = self.temperature if temperature is None else temperature
         max_tokens = self.max_tokens if max_tokens is None else max_tokens
+        # Pick the sampler seed once, here, so it's the same value for whichever
+        # backend handles the call and is inspectable afterwards as
+        # `client.last_seed`. A fresh random seed per call is the default: without
+        # one, llama-server reuses a fixed sampler seed and decodes similar prompts
+        # to the same words every time. Callers that want variation between two
+        # otherwise-identical calls (e.g. "regenerate") rely on this.
+        self.last_seed = random.randint(0, 2**31 - 1) if seed is None else int(seed)
+        logger.debug("LLM chat: seed=%s temperature=%s backend=%s",
+                     self.last_seed, temperature, self.backend)
         # A configurable preamble (e.g. permissive framing for steerable models)
         # is prepended to the system prompt.
         if self.system_preamble:
@@ -74,9 +88,8 @@ class LLMClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
             "stream": False,
-            # Fresh seed per request: without one, llama-server reuses a fixed
-            # sampler seed, so similar prompts decode to the same words every time.
-            "seed": random.randint(0, 2**31 - 1),
+            # Seed chosen in chat(); see LLMClient.last_seed.
+            "seed": self.last_seed,
             # Qwen3 and other reasoning models emit a <think>...</think> block
             # that eats the token budget before any JSON. llama.cpp passes this
             # through to the chat template; templates that don't use it ignore
@@ -101,7 +114,7 @@ class LLMClient:
             "stream": False,
             "think": False,  # Qwen3/DeepSeek-R1 etc.: skip the reasoning block
             "options": {"temperature": temperature, "num_predict": max_tokens,
-                        "seed": random.randint(0, 2**31 - 1)},
+                        "seed": self.last_seed},  # seed chosen in chat()
         }
         try:
             r = requests.post(url, json=body, timeout=timeout)
