@@ -146,8 +146,10 @@ def render(track_id):
                     (max(1, min(int(cand), 8)), track_id))
         except ValueError:
             pass
+    seed_in = request.form.get("seed", "").strip()
+    seed_arg = seed_in if seed_in.isdigit() else None
     try:
-        result = generation.render_track(track_id)
+        result = generation.render_track(track_id, seed=seed_arg)
     except (ACEStepError, ValueError) as exc:
         flash(f"Render failed: {exc}", "error")
         return redirect(url_for("tracks.detail", track_id=track_id))

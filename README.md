@@ -42,7 +42,10 @@ The app has four authoring sections plus an admin console.
    or write a standalone song from a free-text prompt. Either way you then
    **render** it: the app asks ACE-Step for several candidate takes, scores each
    one for basic signal integrity, keeps the best, and lets you audition the
-   rest and promote any of them to the master take.
+   rest and promote any of them to the master take. You can set the **number of
+   candidates** and a **seed** per render — leave the seed blank for a fresh
+   random one each time (so re-renders actually differ), or set it to reproduce a
+   take. A re-render deletes the previous take's audio first, so it's always clean.
 
 ### Mock mode
 

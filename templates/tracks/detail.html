@@ -243,16 +243,19 @@
   {% endif %}
   <form class="gen-form" data-working="Rendering candidates through ACE-Step" method="post"
         action="{{ url_for('tracks.render', track_id=track.id) }}" style="margin-top:12px">
-    <div class="tag-add" style="max-width:340px">
+    <div class="tag-add" style="max-width:460px">
       <label style="white-space:nowrap;align-self:center;margin:0">Candidates</label>
       <input type="number" name="candidates" min="1" max="8"
              value="{{ track.render_candidates or '' }}" placeholder="default"
-             style="max-width:90px">
+             style="max-width:80px">
+      <label style="white-space:nowrap;align-self:center;margin:0">Seed</label>
+      <input type="number" name="seed" min="0" placeholder="random" style="max-width:120px">
       <button class="btn primary" type="submit">
         {{ 'Re-render' if track.audio_path else 'Render audio' }}</button>
     </div>
     <span class="muted mono" style="font-size:11px">
-      renders this many candidates, scores integrity, keeps the best (blank = global default)</span>
+      candidates blank = global default · seed blank = fresh random each render
+      {% if track.seed %}(last: {{ track.seed }}){% endif %}</span>
   </form>
 </div>
 

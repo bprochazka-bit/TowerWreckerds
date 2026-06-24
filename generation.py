@@ -5,7 +5,9 @@ authoring stage (artist, band, album concept + tracklist, track brief), and
 runs the render-N-candidates / pick-best loop against ACE-Step.
 """
 
+import glob
 import os
+import random
 import re
 import wave
 
@@ -1352,7 +1354,7 @@ def generate_track_cover(track_id):
 # Render: N candidates -> integrity check -> select best
 # ---------------------------------------------------------------------------
 
-def render_track(track_id, progress=None, cancel=None, candidates=None):
+def render_track(track_id, progress=None, cancel=None, candidates=None, seed=None):
     """Render N candidates and keep the best.
 
     `progress`, if given, is called as `progress(event, **data)`:
@@ -1428,8 +1430,15 @@ def render_track(track_id, progress=None, cancel=None, candidates=None):
         n = 3
     n = max(1, min(n, 8))
 
-    execute("UPDATE track SET status='producing' WHERE id=?", (track_id,))
+    execute("UPDATE track SET status='producing', audio_path=NULL WHERE id=?", (track_id,))
     execute("DELETE FROM candidate WHERE track_id=?", (track_id,))
+    # Delete the previous render's audio files so a re-render is verifiably clean
+    # (no stale wavs lingering) — the candidate filenames are reused per render.
+    for f in glob.glob(os.path.join(AUDIO_DIR, f"track{track_id}_cand*.*")):
+        try:
+            os.remove(f)
+        except OSError:
+            pass
 
     # Cover (audio2audio) controls; ref_abs was resolved above. Per-track values
     # override the global defaults when set.
@@ -1444,15 +1453,20 @@ def render_track(track_id, progress=None, cancel=None, candidates=None):
     language = language or _owner_language(owner_type, owner_id)
     vocal_language = _lang_code(language)
 
-    base_seed = t["seed"] or (track_id * 1000)
+    # Seed: an explicit seed is reproducible; otherwise use a fresh random base
+    # each render so re-renders actually vary (ACE-Step is deterministic per seed).
+    if seed is not None and str(seed).strip() != "":
+        base_seed = int(seed)
+    else:
+        base_seed = random.randint(1, 2_000_000_000)
     best = None
     for i in range(n):
         if cancel and cancel():
             break
-        seed = base_seed + i
+        cand_seed = base_seed + i
         out_path = os.path.join(AUDIO_DIR, f"track{track_id}_cand{i}.{ace.fmt}")
         try:
-            ace.generate(tags, lyrics, duration, seed, out_path,
+            ace.generate(tags, lyrics, duration, cand_seed, out_path,
                          reference_audio=ref_abs, cover_strength=cover_strength,
                          cover_noise=cover_noise, vocal_language=vocal_language)
             score, note = integrity_score(out_path, duration)
@@ -1462,10 +1476,10 @@ def render_track(track_id, progress=None, cancel=None, candidates=None):
         cid = execute(
             "INSERT INTO candidate (track_id, seed, integrity, audio_path, note, created_at)"
             " VALUES (?,?,?,?,?,?)",
-            (track_id, seed, score, out_path, note, now_iso()),
+            (track_id, cand_seed, score, out_path, note, now_iso()),
         )
         if out_path and (best is None or score > best[1]):
-            best = (cid, score, out_path, seed)
+            best = (cid, score, out_path, cand_seed)
         if progress:
             try:
                 progress("candidate", index=i, total=n, score=score, note=note)
