@@ -325,7 +325,10 @@ to **ffmpeg** (preferred) or **lame**; install one of them for real transcoding.
 If neither is present, the master take is copied verbatim (e.g. as `.wav`) and
 the app tells you encoding was skipped, rather than failing the publish. Tag
 writing itself is pure stdlib, so it needs no extra packages. A missing album
-cover is generated automatically at publish time.
+cover is generated automatically at publish time. The performer's portrait/band
+photo is written into the artist folder as `folder.png`, and **Admin → Update
+published** re-publishes everything already published to refresh tags, covers,
+and artist images from the current data (handy after renames or new artwork).
 
 A track page has a **Download MP3** button (it publishes the single track on
 demand if needed, then downloads it), and the **Published** section browses every

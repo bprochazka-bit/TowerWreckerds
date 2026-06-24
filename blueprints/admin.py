@@ -45,6 +45,17 @@ def admin_home():
                            encoder_ok=enc_ok, encoder_msg=enc_msg)
 
 
+@bp.route("/update-published", methods=["POST"])
+def update_published():
+    res = publish.update_published()
+    msg = (f"Updated published: {res['albums']} album(s), {res['tracks']} single(s)"
+           + (f", {res['failed']} failed" if res["failed"] else "") + ".")
+    flash(msg, "error" if res["failed"] else "ok")
+    if res["warning"]:
+        flash(res["warning"], "error")
+    return redirect(url_for("admin.admin_home"))
+
+
 @bp.route("/settings", methods=["POST"])
 def save_settings():
     for key in SETTING_KEYS:

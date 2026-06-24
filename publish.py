@@ -195,6 +195,36 @@ def _read_image(path):
     return data, mime
 
 
+def _performer_image(owner_type, owner_id):
+    """Absolute path to the performer's portrait/band photo, generating one if
+    it doesn't exist yet."""
+    p = generation._owner_portrait_path(owner_type, owner_id)
+    if p:
+        return p
+    try:
+        if owner_type == "band":
+            rel = generation.generate_band_portrait(owner_id)
+        else:
+            rel = generation.generate_artist_portrait(owner_id)
+        return _abs_audio(rel)
+    except Exception:
+        return None
+
+
+def _place_artist_image(artist_dir, owner_type, owner_id):
+    """Copy the performer's image into their folder as folder.png (for media
+    scanners that show an artist image)."""
+    if not (owner_type and owner_id):
+        return
+    img = _performer_image(owner_type, owner_id)
+    if img and os.path.exists(img):
+        try:
+            os.makedirs(artist_dir, exist_ok=True)
+            shutil.copyfile(img, os.path.join(artist_dir, "folder.png"))
+        except OSError:
+            pass
+
+
 # --- public API -------------------------------------------------------------
 
 def publish_track(track_id, *, album=None, dest_dir=None, cover_path=None,
@@ -255,6 +285,12 @@ def publish_track(track_id, *, album=None, dest_dir=None, cover_path=None,
         album=album_title, track_no=(t["position"] if release else None),
         genre=genre, year=year, cover_bytes=cover_bytes, cover_mime=cover_mime)
 
+    # When publishing a single track directly (not as part of an album batch),
+    # drop the artist image into the artist folder too.
+    if album is None and release:
+        _place_artist_image(os.path.dirname(dest_dir),
+                            release["owner_type"], release["owner_id"])
+
     rel = os.path.relpath(final, ROOT)
     execute("UPDATE track SET status='published', published_path=? WHERE id=?",
             (rel, track_id))
@@ -287,6 +323,8 @@ def publish_album(album_id, progress=None, cancel=None):
     cover_path = _cover_for_release(album)
     if cover_path and os.path.exists(cover_path):
         shutil.copyfile(cover_path, os.path.join(dest_dir, "cover.png"))
+    # Artist image goes in the artist folder (one level up from the album folder).
+    _place_artist_image(os.path.dirname(dest_dir), album["owner_type"], album["owner_id"])
 
     published, warnings, errors = [], set(), []
     failed = cancelled = 0
@@ -322,3 +360,37 @@ def publish_album(album_id, progress=None, cancel=None):
     return {"ok": True, "count": len(published), "dir": dest_dir,
             "failed": failed, "cancelled": cancelled, "errors": errors,
             "warning": "; ".join(sorted(warnings)) or None}
+
+
+def update_published():
+    """Re-publish everything that has been published before, refreshing the MP3
+    tags, embedded/on-disk covers, and artist images from the current data. Audio
+    is re-encoded from the master takes. Returns a summary dict."""
+    res = {"albums": 0, "tracks": 0, "failed": 0, "warnings": set(), "errors": []}
+    albums = query(
+        "SELECT DISTINCT release_id AS rid FROM track"
+        " WHERE published_path IS NOT NULL AND published_path != ''"
+        " AND release_id IS NOT NULL ORDER BY release_id")
+    for a in albums:
+        try:
+            r = publish_album(a["rid"])
+            res["albums"] += 1
+            if r.get("warning"):
+                res["warnings"].add(r["warning"])
+        except PublishError as exc:
+            res["failed"] += 1
+            res["errors"].append(f"album {a['rid']}: {exc}")
+    singles = query(
+        "SELECT id FROM track WHERE published_path IS NOT NULL AND published_path != ''"
+        " AND release_id IS NULL ORDER BY id")
+    for t in singles:
+        try:
+            r = publish_track(t["id"])
+            res["tracks"] += 1
+            if r.get("warning"):
+                res["warnings"].add(r["warning"])
+        except PublishError as exc:
+            res["failed"] += 1
+            res["errors"].append(f"track {t['id']}: {exc}")
+    res["warning"] = "; ".join(sorted(res["warnings"])) or None
+    return res
