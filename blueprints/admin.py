@@ -21,7 +21,7 @@ bp = Blueprint("admin", __name__, url_prefix="/admin")
 SETTING_KEYS = [
     "llm_backend", "llm_base_url", "llm_model", "llm_api_key",
     "llm_temperature", "llm_max_tokens", "lyrics_style", "lyrics_structure",
-    "lyrics_temperature",
+    "lyrics_temperature", "llm_system_preamble",
     "acestep_base_url", "acestep_candidates", "acestep_duration_ceiling",
     "acestep_format", "acestep_trim_noise",
     "acestep_cover_strength", "acestep_cover_noise", "lyrics_strip_parentheticals",

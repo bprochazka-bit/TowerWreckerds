@@ -39,6 +39,7 @@ class LLMClient:
             self.max_tokens = int(s.get("llm_max_tokens", 1500))
         except (TypeError, ValueError):
             self.max_tokens = 1500
+        self.system_preamble = (s.get("llm_system_preamble", "") or "").strip()
 
     # -- low level -----------------------------------------------------------
 
@@ -51,6 +52,10 @@ class LLMClient:
     def chat(self, user, system=None, temperature=None, max_tokens=None, timeout=180):
         temperature = self.temperature if temperature is None else temperature
         max_tokens = self.max_tokens if max_tokens is None else max_tokens
+        # A configurable preamble (e.g. permissive framing for steerable models)
+        # is prepended to the system prompt.
+        if self.system_preamble:
+            system = f"{self.system_preamble}\n\n{system}" if system else self.system_preamble
         messages = []
         if system:
             messages.append({"role": "system", "content": system})

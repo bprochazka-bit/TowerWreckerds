@@ -207,6 +207,7 @@ DEFAULT_SETTINGS = {
     "llm_api_key": "",
     "llm_temperature": "0.8",
     "lyrics_temperature": "0.95",         # creative temp for the dedicated lyric pass
+    "llm_system_preamble": "",            # prepended to every system prompt (e.g. permissive framing)
     "llm_max_tokens": "4096",
     "acestep_base_url": "http://localhost:8765",
     "acestep_candidates": "3",
