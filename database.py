@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS artist (
     vocal TEXT,                  -- lead vocal: '' | female | male | androgynous
     portrait_path TEXT,          -- generated portrait image (relative path)
     portrait_prompt TEXT,        -- last prompt used/edited for the portrait
+    language TEXT,               -- default lyric language for this artist
     status TEXT DEFAULT 'active',
     created_at TEXT
 );
@@ -72,6 +73,7 @@ CREATE TABLE IF NOT EXISTS band (
     vocal TEXT,                  -- lead vocal override: '' (derive from members) | female | male | androgynous
     portrait_path TEXT,          -- generated band photo (relative path)
     portrait_prompt TEXT,        -- last prompt used/edited for the band photo
+    language TEXT,               -- default lyric language for this band
     status TEXT DEFAULT 'active',
     created_at TEXT
 );
@@ -129,6 +131,8 @@ CREATE TABLE IF NOT EXISTS track (
     locked INTEGER DEFAULT 0,       -- 1 = pinned: survives album tracklist regeneration
     cover_strength REAL,            -- per-track audio_cover_strength override (NULL = use global)
     cover_noise REAL,               -- per-track cover_noise_strength override (NULL = use global)
+    render_candidates INTEGER,      -- per-track candidate count (NULL = use global)
+    language TEXT,                  -- per-track lyric language override (NULL = use owner/default)
     status TEXT DEFAULT 'briefed',  -- briefed | producing | rendered | failed | published
     source TEXT DEFAULT 'album',    -- album | freeform | cover
     created_at TEXT,
@@ -523,6 +527,10 @@ MIGRATIONS = [
     ("track", "locked", "INTEGER DEFAULT 0"),
     ("track", "cover_strength", "REAL"),
     ("track", "cover_noise", "REAL"),
+    ("track", "render_candidates", "INTEGER"),
+    ("track", "language", "TEXT"),
+    ("artist", "language", "TEXT"),
+    ("band", "language", "TEXT"),
     ("release", "cover_path", "TEXT"),
     ("release", "cover_prompt", "TEXT"),
     ("artist", "influences", "TEXT"),

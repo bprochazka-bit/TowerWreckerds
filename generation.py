@@ -122,6 +122,7 @@ def generate_artist(hints):
     user = f"""Create one musical artist as JSON with exactly these keys:
   name, persona, backstory, region, primary_genre, secondary_genres (array of 0-2),
   gender (the lead vocal: one of female, male, androgynous),
+  language (the language they sing in, based on region — e.g. English, Spanish),
   stage (one of: emerging, rising, established, veteran),
   refinement (0.0-1.0 number reflecting how polished their production is).
 
@@ -151,8 +152,8 @@ def _norm_vocal(value):
 def _persist_artist(data, artist_type="solo"):
     aid = execute(
         "INSERT INTO artist (name, type, persona, backstory, region, primary_genre,"
-        " secondary_genres, stage, refinement, vocal, created_at)"
-        " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        " secondary_genres, stage, refinement, vocal, language, created_at)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             _text(data.get("name")) or "Untitled Artist",
             artist_type,
@@ -164,6 +165,7 @@ def _persist_artist(data, artist_type="solo"):
             _text(data.get("stage", "emerging")) or "emerging",
             float(data.get("refinement", 0.3) or 0.3) if not isinstance(data.get("refinement"), (list, dict)) else 0.3,
             _norm_vocal(_text(data.get("gender") or data.get("vocal"))),
+            _text(data.get("language", "")),
             now_iso(),
         ),
     )
@@ -183,6 +185,7 @@ def generate_band_from_scratch(hints):
     system = "You are a music-world worldbuilder inventing a coherent band and its lineup."
     user = f"""Invent a band as JSON with keys:
   name, primary_genre, backstory,
+  language (the language they sing in, based on origin — e.g. English, Spanish),
   members: array of exactly {size} objects, each with keys
      name, persona, region, instrument, gender (female, male, or androgynous),
      refinement (0.0-1.0).
@@ -193,10 +196,11 @@ Members should feel like real people with chemistry and tension.
 """
     data = llm.generate_json(user, system=system)
     band_id = execute(
-        "INSERT INTO band (name, primary_genre, backstory, formed_on, created_at)"
-        " VALUES (?,?,?,?,?)",
+        "INSERT INTO band (name, primary_genre, backstory, language, formed_on, created_at)"
+        " VALUES (?,?,?,?,?,?)",
         (_text(data.get("name")) or "Untitled Band", _text(data.get("primary_genre", "")),
-         _text(data.get("backstory", "")), now_iso()[:10], now_iso()),
+         _text(data.get("backstory", "")), _text(data.get("language", "")),
+         now_iso()[:10], now_iso()),
     )
     for m in data.get("members", []):
         aid = _persist_artist(
@@ -317,6 +321,34 @@ def _owner_vocal(owner_type, owner_id):
     return (a["vocal"] or "").strip() if a and "vocal" in a.keys() else ""
 
 
+def _owner_language(owner_type, owner_id):
+    """The default lyric language for a performer, or ''."""
+    if not owner_type or owner_id is None:
+        return ""
+    table = "band" if owner_type == "band" else "artist"
+    r = query(f"SELECT language FROM {table} WHERE id = ?", (owner_id,), one=True)
+    return (r["language"] or "").strip() if r and "language" in r.keys() else ""
+
+
+_LANG_CODES = {
+    "english": "en", "spanish": "es", "español": "es", "french": "fr",
+    "français": "fr", "german": "de", "deutsch": "de", "italian": "it",
+    "portuguese": "pt", "português": "pt", "dutch": "nl", "russian": "ru",
+    "japanese": "ja", "korean": "ko", "chinese": "zh", "mandarin": "zh",
+    "arabic": "ar", "hindi": "hi", "swedish": "sv", "norwegian": "no",
+    "danish": "da", "finnish": "fi", "polish": "pl", "turkish": "tr",
+}
+
+
+def _lang_code(name):
+    """Map a language name to a BCP-47 code for ACE-Step's vocal_language; pass a
+    short code or unknown value through as-is."""
+    n = (name or "").strip().lower()
+    if not n:
+        return ""
+    return _LANG_CODES.get(n, n)
+
+
 def _apply_vocal_to_tags(tags, vocal):
     """Drop any gendered-vocal tags and append the performer's actual vocal."""
     if not vocal:
@@ -425,7 +457,7 @@ def _lyrics_temperature():
 
 
 def _write_lyrics(ctx, genre, title, role="", subject="", summary="", mood="",
-                  tempo=None, style_cues=None, notes="", duration=None):
+                  tempo=None, style_cues=None, notes="", duration=None, language=""):
     """Generate just the lyrics in a focused call at the lyric temperature, so
     the words can run creative while the structured brief stays calm and parses."""
     llm = LLMClient()
@@ -433,6 +465,7 @@ def _write_lyrics(ctx, genre, title, role="", subject="", summary="", mood="",
         cues = style_cues
     else:
         cues = ", ".join(style_cues or [])
+    lang_line = (f"Write the lyrics entirely in {language}.\n") if language else ""
     system = "You are a songwriter writing lyrics to fit a track brief."
     user = f"""{ctx}
 Track: "{title}"{f" (role: {role})" if role else ''}
@@ -442,7 +475,7 @@ Mood: {mood or '(unspecified)'} | tempo: {tempo or '?'} bpm
 Style cues: {cues or '(none)'}
 {('Lyric direction: ' + notes) if notes else ''}
 
-Write the lyrics with [verse]/[chorus] section tags, in this performer's voice
+{lang_line}Write the lyrics with [verse]/[chorus] section tags, in this performer's voice
 and the {genre or 'song'}'s idiom — specific, not generic. Return JSON with a
 single key "lyrics" whose value is the lyric text.
 
@@ -452,6 +485,16 @@ single key "lyrics" whose value is the lyric text.
     if isinstance(data, dict):
         return _lyrics_text(data.get("lyrics") or data.get("text") or "")
     return data if isinstance(data, str) else ""
+
+
+def _strip_lrc_timestamps(lyrics):
+    """Remove LRC `[mm:ss.xx]` timestamps (and a leading space) from synced lyrics
+    so they render cleanly — ACE-Step's lyric field is structure-based, not timed,
+    and would otherwise sing the timestamps."""
+    if not lyrics:
+        return lyrics
+    text = re.sub(r"\[\d{1,3}:\d{2}(?:[.:]\d{1,3})?\]\s?", "", lyrics)
+    return text
 
 
 def _strip_lyric_directives(lyrics):
@@ -677,10 +720,12 @@ Return JSON with keys (no lyrics — those are written separately):
     # creative-temperature pass.
     no_lyrics = bool(t["instrumental"]) if "instrumental" in t.keys() else False
     notes = (t["lyric_notes"] or "").strip() if "lyric_notes" in t.keys() else ""
+    language = (t["language"] or "").strip() if "language" in t.keys() else ""
+    language = language or _owner_language(rel["owner_type"], rel["owner_id"])
     lyrics_out = "" if no_lyrics else _write_lyrics(
         ctx, genre, t["title"], role=t["role"], subject=t["subject"],
         summary=t["summary"], mood=mood, tempo=tempo, style_cues=final_tags,
-        notes=notes, duration=duration)
+        notes=notes, duration=duration, language=language)
     execute(
         "UPDATE track SET lyrics=?, style_tags=?, tempo=?, song_key=?, mood=?,"
         " environmentals=?, duration=?, status='briefed' WHERE id=?",
@@ -703,16 +748,22 @@ def regenerate_lyrics(track_id):
         raise LLMError("This track is an instrumental — it has no lyrics.")
     ctx = ""
     genre = ""
+    owner_type = owner_id = None
     if t["release_id"]:
         rel = query("SELECT owner_type, owner_id FROM release WHERE id = ?",
                     (t["release_id"],), one=True)
         if rel:
-            ctx, genre = _owner_context(rel["owner_type"], rel["owner_id"], for_lyrics=True)
+            owner_type, owner_id = rel["owner_type"], rel["owner_id"]
+            ctx, genre = _owner_context(owner_type, owner_id, for_lyrics=True)
     notes = (t["lyric_notes"] or "").strip() if "lyric_notes" in t.keys() else ""
+    language = (t["language"] or "").strip() if "language" in t.keys() else ""
+    if not language and owner_type:
+        language = _owner_language(owner_type, owner_id)
     lyrics = _write_lyrics(
         ctx, genre, t["title"], role=t["role"], subject=t["subject"],
         summary=t["summary"], mood=t["mood"], tempo=t["tempo"],
-        style_cues=jload(t["style_tags"], []), notes=notes, duration=t["duration"])
+        style_cues=jload(t["style_tags"], []), notes=notes, duration=t["duration"],
+        language=language)
     if not (lyrics or "").strip():
         raise LLMError("model returned no lyrics")
     execute("UPDATE track SET lyrics=? WHERE id=?", (lyrics, track_id))
@@ -851,9 +902,10 @@ Return JSON with keys (no lyrics — those are written separately):
     mood = _text(data.get("mood", ""))
     tempo = _intval(data.get("tempo"))
     duration = _intval(data.get("duration_seconds"), 180)
+    language = _owner_language(owner_type, owner_id) if (owner_type and owner_id) else ""
     lyrics = _write_lyrics(ctx, genre, title, subject=subject, summary=summary,
                            mood=mood, tempo=tempo, style_cues=final_tags,
-                           duration=duration)
+                           duration=duration, language=language)
     tid = execute(
         "INSERT INTO track (position, role, title, subject, summary, lyrics, style_tags,"
         " tempo, song_key, mood, environmentals, duration, influences, status, source, created_at)"
@@ -1002,22 +1054,29 @@ def _reference_artist_title(reference_rel):
     return artist.strip(), title.strip()
 
 
-def fetch_reference_lyrics(reference_rel):
+def fetch_reference_lyrics(reference_rel, synced=False):
     """Look up the original song's lyrics from LRCLIB (free, no API key) using
-    the reference's artist/title. Returns plain lyrics text. Raises ValueError
+    the reference's artist/title. Returns plain lyrics, or — when `synced` and
+    LRCLIB has them — the timestamped LRC (`[mm:ss.xx]` lines). Raises ValueError
     if nothing is found or the lookup fails."""
     import requests
     artist, title = _reference_artist_title(reference_rel)
     if not title:
         raise ValueError("couldn't determine the song title from the reference")
+    field = "syncedLyrics" if synced else "plainLyrics"
     headers = {"User-Agent": "MusicWorld (local music-world app)"}
+
+    def _pick(d):
+        # Prefer the requested field; fall back to plain if synced is missing.
+        return (d.get(field) or (d.get("plainLyrics") if synced else "") or "").strip()
+
     try:
         if artist:
             r = requests.get("https://lrclib.net/api/get",
                              params={"artist_name": artist, "track_name": title},
                              headers=headers, timeout=15)
             if r.status_code == 200:
-                lyr = (r.json().get("plainLyrics") or "").strip()
+                lyr = _pick(r.json())
                 if lyr:
                     return lyr
         q = (artist + " " + title).strip()
@@ -1025,7 +1084,7 @@ def fetch_reference_lyrics(reference_rel):
                          headers=headers, timeout=15)
         r.raise_for_status()
         for item in r.json() or []:
-            lyr = (item.get("plainLyrics") or "").strip()
+            lyr = _pick(item)
             if lyr:
                 return lyr
     except requests.RequestException as exc:
@@ -1082,9 +1141,11 @@ Return JSON with keys (no lyrics — those are handled separately):
     tempo = _intval(data.get("tempo"))
     duration = _intval(data.get("duration_seconds"), 180)
     # Use the original's real lyrics if found, else write fresh ones in a pass.
+    language = _owner_language(owner_type, owner_id) if (owner_type and owner_id) else ""
     lyrics_out = fetched if fetched else _write_lyrics(
         ctx, genre, title, subject=subject, summary=summary, mood=mood,
-        tempo=tempo, style_cues=final_tags, notes=notes, duration=duration)
+        tempo=tempo, style_cues=final_tags, notes=notes, duration=duration,
+        language=language)
     tid = execute(
         "INSERT INTO track (position, role, title, subject, summary, lyrics, style_tags,"
         " tempo, song_key, mood, environmentals, duration, reference_audio, influences,"
@@ -1291,7 +1352,7 @@ def generate_track_cover(track_id):
 # Render: N candidates -> integrity check -> select best
 # ---------------------------------------------------------------------------
 
-def render_track(track_id, progress=None, cancel=None):
+def render_track(track_id, progress=None, cancel=None, candidates=None):
     """Render N candidates and keep the best.
 
     `progress`, if given, is called as `progress(event, **data)`:
@@ -1330,8 +1391,15 @@ def render_track(track_id, progress=None, cancel=None):
     instrumental = bool(t["instrumental"]) if "instrumental" in t.keys() else False
     # A cover renders audio2audio: the source recording supplies the musical
     # STYLE/structure, but the track's own lyrics are still sung over it. Only an
-    # instrumental suppresses lyrics/vocals.
-    ref_abs = reference_music_abspath(t["reference_audio"]) if t["reference_audio"] else None
+    # instrumental suppresses lyrics/vocals. If a reference is set but can't be
+    # found, fail loudly rather than silently rendering a plain (non-cover) take.
+    ref_abs = None
+    if t["reference_audio"]:
+        ref_abs = reference_music_abspath(t["reference_audio"])
+        if not ref_abs:
+            raise ValueError(
+                f"cover reference not found: {t['reference_audio']} — check the "
+                "reference-music path in Admin (rendered as a non-cover otherwise).")
 
     # Lead-vocal gender wins over any default/LLM guess, except for instrumentals.
     vocal = "" if instrumental else _owner_vocal(owner_type, owner_id)
@@ -1343,16 +1411,22 @@ def render_track(track_id, progress=None, cancel=None):
     if instrumental:
         lyrics = "[Instrumental]"   # no vocals
     else:
-        lyrics = t["lyrics"] or ""
+        lyrics = _strip_lrc_timestamps(t["lyrics"] or "")   # render-safe if LRC-timed
         if str(settings.get("lyrics_strip_parentheticals", "1")) in ("1", "true", "True", "on"):
             lyrics = _strip_lyric_directives(lyrics)
     duration = t["duration"] or 180
 
+    # Candidate count: explicit arg > per-track override > global setting.
+    n_src = candidates
+    if n_src is None and "render_candidates" in t.keys():
+        n_src = t["render_candidates"]
+    if n_src is None:
+        n_src = settings.get("acestep_candidates", 3)
     try:
-        n = int(settings.get("acestep_candidates", 3))
+        n = int(n_src)
     except (TypeError, ValueError):
         n = 3
-    n = max(1, n)
+    n = max(1, min(n, 8))
 
     execute("UPDATE track SET status='producing' WHERE id=?", (track_id,))
     execute("DELETE FROM candidate WHERE track_id=?", (track_id,))
@@ -1365,6 +1439,11 @@ def render_track(track_id, progress=None, cancel=None):
     cover_strength = _track_or_setting("cover_strength", "acestep_cover_strength")
     cover_noise = _track_or_setting("cover_noise", "acestep_cover_noise")
 
+    # Lyric language → ACE-Step vocal_language (track override, else owner default).
+    language = (t["language"] or "").strip() if "language" in t.keys() else ""
+    language = language or _owner_language(owner_type, owner_id)
+    vocal_language = _lang_code(language)
+
     base_seed = t["seed"] or (track_id * 1000)
     best = None
     for i in range(n):
@@ -1375,7 +1454,7 @@ def render_track(track_id, progress=None, cancel=None):
         try:
             ace.generate(tags, lyrics, duration, seed, out_path,
                          reference_audio=ref_abs, cover_strength=cover_strength,
-                         cover_noise=cover_noise)
+                         cover_noise=cover_noise, vocal_language=vocal_language)
             score, note = integrity_score(out_path, duration)
         except Exception as exc:  # keep going; a bad candidate shouldn't kill the batch
             score, note = 0.0, f"render error: {exc}"

@@ -139,6 +139,13 @@ def brief(track_id):
 
 @bp.route("/<int:track_id>/render", methods=["POST"])
 def render(track_id):
+    cand = request.form.get("candidates", "").strip()
+    if cand:
+        try:
+            execute("UPDATE track SET render_candidates=? WHERE id=?",
+                    (max(1, min(int(cand), 8)), track_id))
+        except ValueError:
+            pass
     try:
         result = generation.render_track(track_id)
     except (ACEStepError, ValueError) as exc:
@@ -267,11 +274,12 @@ def save_brief(track_id):
 def save_source(track_id):
     if not query("SELECT 1 FROM track WHERE id=?", (track_id,), one=True):
         return redirect(url_for("tracks.library"))
-    execute("UPDATE track SET subject=?, summary=?, lyric_notes=?, instrumental=? WHERE id=?",
+    execute("UPDATE track SET subject=?, summary=?, lyric_notes=?, instrumental=?, language=? WHERE id=?",
             (request.form.get("subject", "").strip(),
              request.form.get("summary", "").strip(),
              request.form.get("lyric_notes", "").strip(),
-             1 if request.form.get("instrumental") else 0, track_id))
+             1 if request.form.get("instrumental") else 0,
+             request.form.get("language", "").strip() or None, track_id))
     flash("Lyric source saved.", "ok")
     return redirect(url_for("tracks.detail", track_id=track_id))
 
@@ -307,13 +315,15 @@ def fetch_lyrics(track_id):
     if not t["reference_audio"]:
         flash("Set a cover reference first, then fetch its lyrics.", "error")
         return redirect(url_for("tracks.detail", track_id=track_id))
+    synced = bool(request.form.get("synced"))
     try:
-        lyrics = generation.fetch_reference_lyrics(t["reference_audio"])
+        lyrics = generation.fetch_reference_lyrics(t["reference_audio"], synced=synced)
     except ValueError as exc:
         flash(f"Couldn't fetch lyrics: {exc}", "error")
         return redirect(url_for("tracks.detail", track_id=track_id))
     execute("UPDATE track SET lyrics=? WHERE id=?", (lyrics, track_id))
-    flash("Fetched the original lyrics into the lyrics box.", "ok")
+    flash("Fetched the original lyrics" + (" with timing (LRC) — timestamps are kept "
+          "for reference and stripped at render." if synced else "") + ".", "ok")
     return redirect(url_for("tracks.detail", track_id=track_id))
 
 

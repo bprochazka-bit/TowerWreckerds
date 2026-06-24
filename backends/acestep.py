@@ -65,7 +65,8 @@ class ACEStepClient:
             return False, str(exc)
 
     def generate(self, tags, lyrics, duration, seed, out_path, timeout=600,
-                 reference_audio=None, cover_strength=None, cover_noise=None):
+                 reference_audio=None, cover_strength=None, cover_noise=None,
+                 vocal_language=None):
         """Render one audio file to out_path. Returns out_path.
 
         acestep.cpp's HTTP API is asynchronous (validated against ace-server.cpp):
@@ -97,6 +98,8 @@ class ACEStepClient:
             "output_format": self.synth_format,
             "task_type": "text2music",
         }
+        if vocal_language:
+            req["vocal_language"] = vocal_language
         src_audio = None
         if reference_audio and os.path.exists(reference_audio):
             req["task_type"] = "cover"

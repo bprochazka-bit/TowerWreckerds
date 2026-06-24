@@ -84,6 +84,15 @@
         any default.</p>
       <div class="btn-row"><button class="btn sm" type="submit">Save vocal</button></div>
     </form>
+    <div class="strip-label" style="margin-top:16px">Lyric language</div>
+    <form method="post" action="{{ url_for('artists.update_language', artist_id=artist.id) }}">
+      <input type="text" name="language" value="{{ artist.language or '' }}"
+             placeholder="e.g. English, Spanish (blank = English/auto)">
+      <p class="muted" style="font-size:12px;margin-top:6px">Default language for this
+        artist's lyrics — used when writing lyrics and passed to ACE-Step (per-track
+        override on the track page).</p>
+      <div class="btn-row"><button class="btn sm" type="submit">Save language</button></div>
+    </form>
   </div>
 </div>
 

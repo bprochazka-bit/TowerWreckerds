@@ -161,6 +161,9 @@
     <label style="margin-top:10px">Lyric direction <span class="muted">(optional)</span></label>
     <textarea name="lyric_notes" rows="3"
       placeholder="e.g. impressionistic and fragmented, surreal imagery, non-narrative, second-person, sparse">{{ track.lyric_notes or '' }}</textarea>
+    <label style="margin-top:10px">Language <span class="muted">(blank = performer default)</span></label>
+    <input type="text" name="language" value="{{ track.language or '' }}"
+           placeholder="e.g. English, Spanish, Japanese">
     <div class="btn-row"><button class="btn sm" type="submit">Save source</button></div>
   </form>
   <form class="gen-form" data-working="Regenerating lyrics" method="post"
@@ -207,8 +210,13 @@
   <form class="gen-form" data-working="Looking up the original lyrics" method="post"
         action="{{ url_for('tracks.fetch_lyrics', track_id=track.id) }}" style="margin-top:8px"
         {% if track.lyrics %}onsubmit="return confirm('Replace the lyrics with the original song\'s lyrics?')"{% endif %}>
-    <button class="btn sm" type="submit">Fetch original lyrics</button>
-    <span class="muted mono" style="font-size:11px;margin-left:8px">from LRCLIB, into the lyrics box</span>
+    <div class="btn-row">
+      <button class="btn sm" type="submit">Fetch original lyrics</button>
+      <label class="check" style="margin:0"><input type="checkbox" name="synced">
+        <span>with timing (LRC)</span></label>
+    </div>
+    <span class="muted mono" style="font-size:11px">from LRCLIB. Timestamps are kept
+      for reference but stripped at render (ACE-Step uses structure tags, not timing).</span>
   </form>
   {% endif %}
   {% endif %}
@@ -235,10 +243,16 @@
   {% endif %}
   <form class="gen-form" data-working="Rendering candidates through ACE-Step" method="post"
         action="{{ url_for('tracks.render', track_id=track.id) }}" style="margin-top:12px">
-    <button class="btn primary" type="submit">
-      {{ 'Re-render' if track.audio_path else 'Render audio' }}</button>
-    <span class="muted mono" style="font-size:11px;margin-left:10px">
-      generates candidates, scores integrity, keeps the best</span>
+    <div class="tag-add" style="max-width:340px">
+      <label style="white-space:nowrap;align-self:center;margin:0">Candidates</label>
+      <input type="number" name="candidates" min="1" max="8"
+             value="{{ track.render_candidates or '' }}" placeholder="default"
+             style="max-width:90px">
+      <button class="btn primary" type="submit">
+        {{ 'Re-render' if track.audio_path else 'Render audio' }}</button>
+    </div>
+    <span class="muted mono" style="font-size:11px">
+      renders this many candidates, scores integrity, keeps the best (blank = global default)</span>
   </form>
 </div>
 

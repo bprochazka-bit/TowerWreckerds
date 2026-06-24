@@ -173,6 +173,13 @@ by its high zero-crossing rate and low crest factor, so tonal endings and
 fade-outs are left intact. It works on WAV output only. Each track page also has
 a **Trim trailing noise** button to clean up tracks that were rendered earlier.
 
+### Lyric language
+
+Bands and solo artists have a default **lyric language** (auto-filled at
+generation from their origin, editable on the detail page). Lyrics are written
+in that language and it's passed to ACE-Step as `vocal_language` (mapped to a
+BCP-47 code). Each track can override it in its Lyric source panel.
+
 ### Lyric style and regeneration
 
 Lyric generation is **not seeded** — it comes from the language model, so it

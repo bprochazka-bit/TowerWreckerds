@@ -119,6 +119,14 @@ def update_influences(band_id):
     return redirect(url_for("bands.detail", band_id=band_id))
 
 
+@bp.route("/<int:band_id>/language", methods=["POST"])
+def update_language(band_id):
+    execute("UPDATE band SET language=? WHERE id=?",
+            (request.form.get("language", "").strip(), band_id))
+    flash("Default lyric language saved.", "ok")
+    return redirect(url_for("bands.detail", band_id=band_id))
+
+
 @bp.route("/<int:band_id>/vocal", methods=["POST"])
 def update_vocal(band_id):
     v = request.form.get("vocal", "").strip().lower()
