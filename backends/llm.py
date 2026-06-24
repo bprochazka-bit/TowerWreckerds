@@ -13,6 +13,7 @@ backend by returning canned structured content.
 """
 
 import json
+import random
 import re
 
 import requests
@@ -73,6 +74,9 @@ class LLMClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
             "stream": False,
+            # Fresh seed per request: without one, llama-server reuses a fixed
+            # sampler seed, so similar prompts decode to the same words every time.
+            "seed": random.randint(0, 2**31 - 1),
             # Qwen3 and other reasoning models emit a <think>...</think> block
             # that eats the token budget before any JSON. llama.cpp passes this
             # through to the chat template; templates that don't use it ignore
@@ -96,7 +100,8 @@ class LLMClient:
             "messages": messages,
             "stream": False,
             "think": False,  # Qwen3/DeepSeek-R1 etc.: skip the reasoning block
-            "options": {"temperature": temperature, "num_predict": max_tokens},
+            "options": {"temperature": temperature, "num_predict": max_tokens,
+                        "seed": random.randint(0, 2**31 - 1)},
         }
         try:
             r = requests.post(url, json=body, timeout=timeout)

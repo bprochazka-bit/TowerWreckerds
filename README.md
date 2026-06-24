@@ -187,9 +187,11 @@ BCP-47 code). Each track can override it in its Lyric source panel.
 
 ### Lyric style and regeneration
 
-Lyric generation is **not seeded** — it comes from the language model, so it
-varies each run (raise *Temperature* in Admin for more variation). Several levers
-shape every lyric prompt:
+Every LLM request sends a **fresh random seed**, so generations vary run to run
+rather than decoding to the same words each time (raise *Temperature* in Admin
+for even more variation). Album concept/tracklist **naming** runs at the *Lyric
+temperature* too, so titles don't come out near-greedy and repetitive. Several
+levers shape every lyric prompt:
 
 - **Lyric temperature** (Admin) — lyrics are written in a *separate* pass from the
   structured brief, so you can run the words hotter (more creative) while the brief

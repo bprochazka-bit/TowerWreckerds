@@ -596,7 +596,7 @@ Sequence the roles sensibly (opener first, closer last).
 
 {_NAMING_GUIDANCE}
 """
-    data = llm.generate_json(user, system=system)
+    data = llm.generate_json(user, system=system, temperature=_lyrics_temperature())
     final_title = fixed_title or _text(data.get("title")) or "Untitled"
     rid = execute(
         "INSERT INTO release (owner_type, owner_id, type, title, concept, inspiration,"
@@ -662,7 +662,7 @@ Sequence the roles sensibly.
 
 {_NAMING_GUIDANCE}
 """
-        data = llm.generate_json(user, system=system)
+        data = llm.generate_json(user, system=system, temperature=_lyrics_temperature())
         new_tracks = (data.get("tracks", []) or [])[:n_new]  # never exceed the target
     else:
         new_tracks = []
