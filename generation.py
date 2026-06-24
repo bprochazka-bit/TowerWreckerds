@@ -407,7 +407,7 @@ def _lyric_style_line():
 _GENRE_LYRIC_DEFAULTS = {
     "indie rock": "earnest and conversational, specific personal images, wry and understated.",
     "synthwave": "neon nightscapes, motion and longing, sleek and nostalgic; spare.",
-    "country": "plainspoken narrative with concrete rural detail and a clear story or character.",
+    "country": "plainspoken narrative with specific, vivid rural detail and a clear story or character.",
     "hip hop": "rhythmic, dense wordplay and internal rhyme, swagger or sharp social observation.",
     "r&b": "intimate, sensual and emotionally direct; smooth, repeatable hooks.",
     "folk": "poetic and imagistic, restrained, a story or parable; few words, well chosen.",
@@ -526,6 +526,17 @@ _TRACK_KEYS_DOC = """     position (int, 1-based),
         in the album's concept/ethos and the artist; not the lyrics themselves)."""
 
 
+# Appended to album-concept/tracklist prompts to fight the model's tendency to
+# reach for the same stock title words on every release.
+_NAMING_GUIDANCE = (
+    "Naming: make the album title and track titles specific to THIS concept and "
+    "this artist. Avoid generic, overused title clichés — e.g. neon, concrete, "
+    "echoes, shadows, midnight, velvet, static, whispers, fragments, chrome, "
+    "embers — unless the concept genuinely demands one. Favor fresh, concrete "
+    "nouns and phrases drawn from the actual subject matter."
+)
+
+
 def _insert_tracklist(rid, tracks, position_from=None):
     for i, t in enumerate(tracks):
         cues = _aslist(t.get("style_cues"))
@@ -582,6 +593,8 @@ Return JSON with keys:
   tracks: array of exactly {n} objects, each with keys:
 {_TRACK_KEYS_DOC}
 Sequence the roles sensibly (opener first, closer last).
+
+{_NAMING_GUIDANCE}
 """
     data = llm.generate_json(user, system=system)
     final_title = fixed_title or _text(data.get("title")) or "Untitled"
@@ -646,6 +659,8 @@ Return JSON with key:
   tracks: array of exactly {n_new} objects, each with keys:
 {_TRACK_KEYS_DOC}
 Sequence the roles sensibly.
+
+{_NAMING_GUIDANCE}
 """
         data = llm.generate_json(user, system=system)
         new_tracks = (data.get("tracks", []) or [])[:n_new]  # never exceed the target
