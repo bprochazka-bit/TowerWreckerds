@@ -526,14 +526,21 @@ _TRACK_KEYS_DOC = """     position (int, 1-based),
         in the album's concept/ethos and the artist; not the lyrics themselves)."""
 
 
-# Appended to album-concept/tracklist prompts to fight the model's tendency to
-# reach for the same stock title words on every release.
+# Appended to album-concept/tracklist prompts. Without strong steering, models
+# (a) decode to the same stock words, and (b) over-literally mash the brief's
+# keywords and the album title into a themed-pun set (e.g. "Roots" -> Soil
+# Sample, Mycelium Network). This pushes them toward real, human song titles.
 _NAMING_GUIDANCE = (
-    "Naming: make the album title and track titles specific to THIS concept and "
-    "this artist. Avoid generic, overused title clichés — e.g. neon, concrete, "
-    "echoes, shadows, midnight, velvet, static, whispers, fragments, chrome, "
-    "embers — unless the concept genuinely demands one. Favor fresh, concrete "
-    "nouns and phrases drawn from the actual subject matter."
+    "Naming: title the album and each track like real songs in this genre — "
+    "human, evocative, and varied, each rooted in that song's own emotion or "
+    "story. Do NOT apply one gimmick or motif across the whole tracklist, and do "
+    "NOT turn the brief's literal keywords or the album title into the track names "
+    "(e.g. don't make a run of gardening puns from the word 'roots', or tech puns "
+    "from 'electric/glitchy'). Read themes figuratively, in their musical sense — "
+    "'roots' means heritage and origins, not soil or plants. Avoid stock title "
+    "words (neon, concrete, echoes, ghosts, shadows, midnight, static, velvet) and "
+    "tech jargon (circuit, signal, protocol, network, upload, decay) unless a song "
+    "is truly about that. When unsure, simpler and more emotional beats clever."
 )
 
 
