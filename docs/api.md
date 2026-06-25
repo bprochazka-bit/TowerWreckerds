@@ -88,6 +88,16 @@ Poll `GET /api/jobs/<id>`, list with `GET /api/jobs`, stop with
 > Note: `render` needs lyrics, so leave `brief` on (the default) unless the
 > tracks are all instrumentals.
 
+Both extremes work. Supply a full brief for maximum control, or go minimal and
+let the model invent everything — the only required key is `album`, and it may
+be an empty object:
+
+```bash
+# "surprise me": invent the artist and a whole album from nothing
+curl -X POST localhost:5000/api/oneshot -d '{"performer":{"kind":"artist"},"album":{}}' \
+     -H 'Content-Type: application/json'
+```
+
 ### Example 1 — new artist, photo, album, cover, render, publish
 
 ```bash

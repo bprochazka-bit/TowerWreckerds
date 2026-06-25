@@ -226,8 +226,11 @@ def validate(spec):
         if not ref.get("id") or not query(
                 f"SELECT 1 FROM {table} WHERE id=?", (ref["id"],), one=True):
             raise ValueError("performer_ref.id not found")
-    if not spec.get("album"):
-        raise ValueError("'album' spec is required")
+    # The "album" key must be present, but may be an empty object: with no
+    # ethos/style_tags/track_count the LLM invents the whole release ("surprise
+    # me" mode). A full brief is equally valid — both are supported.
+    if "album" not in spec:
+        raise ValueError("'album' key is required (may be {} to let the model invent it)")
     return spec
 
 
