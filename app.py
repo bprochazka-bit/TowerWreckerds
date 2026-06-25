@@ -13,6 +13,7 @@ from blueprints.albums import bp as albums_bp
 from blueprints.tracks import bp as tracks_bp
 from blueprints.published import bp as published_bp
 from blueprints.admin import bp as admin_bp
+from blueprints.api import bp as api_bp
 
 
 def create_app():
@@ -38,6 +39,7 @@ def create_app():
     app.register_blueprint(tracks_bp)
     app.register_blueprint(published_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(api_bp)
 
     # Make json-decoding available inside templates.
     app.jinja_env.filters["jload"] = lambda v: jload(v, [])

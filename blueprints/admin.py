@@ -30,6 +30,7 @@ SETTING_KEYS = [
     "sdcpp_url", "sdcpp_path", "sdcpp_model", "sdcpp_steps", "sdcpp_size",
     "sdcpp_cfg", "sdcpp_negative",
     "publish_path",
+    "api_token",
 ]
 CHECKBOX_KEYS = {"mock_mode", "acestep_trim_noise", "lyrics_strip_parentheticals"}
 

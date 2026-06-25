@@ -249,6 +249,9 @@ DEFAULT_SETTINGS = {
     "sdcpp_negative": "text, watermark, signature, blurry, low quality, deformed",
     # Where published MP3s + covers are written. Blank => <app>/published.
     "publish_path": "",
+    # JSON API auth. Blank => the /api endpoints are open (local single-user
+    # console). Set a token to require X-API-Key / ?token= on every /api call.
+    "api_token": "",
 }
 
 

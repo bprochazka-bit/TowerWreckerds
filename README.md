@@ -344,6 +344,31 @@ them. That wraps the track in a release (a single by default) owned by the
 performer — so it appears under their releases, and the performer's influences
 and lead vocal apply on the next render.
 
+## JSON API
+
+Everything above is also a plain-JSON REST API under `/api` — create/generate
+artists, bands, portraits; generate albums, tracklists, covers; brief, render,
+and publish. It also exposes **one-shot pipelines** that run the whole chain in
+a single call:
+
+- **New artist → photo → album → cover → tracklist → render all → publish**
+- **New album (for an existing performer) → cover → tracklist → render → publish**
+
+```bash
+curl -X POST localhost:5000/api/oneshot -H 'Content-Type: application/json' -d '{
+  "performer": { "kind": "artist", "hints": { "primary_genre": "reggae" } },
+  "portrait": true,
+  "album": { "ethos": "sunny island roots", "style_tags": ["reggae"], "type": "ep", "track_count": 5 },
+  "cover": true, "brief": true, "render": true, "publish": true
+}'
+# -> 202 {"id": "<job>", ...}; poll: curl localhost:5000/api/jobs/<job>
+```
+
+The API is open by default (local single-user console); set the `api_token`
+setting to require an `X-API-Key` header. Full endpoint reference, the pipeline
+spec, and background-vs-`?sync=1` behaviour are in
+**[docs/api.md](docs/api.md)**.
+
 ## Taxonomy
 
 The Admin console also manages the **genre** and **style-tag** taxonomy the
@@ -379,13 +404,15 @@ music-world/
 ├── database.py            # SQLite schema, seed data, settings store
 ├── generation.py          # orchestration: artists, bands, albums, tracks, render, covers, art
 ├── publish.py             # export tracks/albums as ID3-tagged MP3s + embedded cover art
+├── jobs.py                # in-memory background jobs for album-wide brief/render/publish
+├── pipeline.py            # one-shot create→render→publish pipelines for the JSON API
 ├── manage.py              # CLI: bulk import/export/list genres
 ├── acestep_adapter.py     # reference HTTP bridge to ACE-Step (runs in ACE-Step's env)
 ├── backends/
 │   ├── llm.py             # llama.cpp / ollama / openai client + JSON extraction
 │   ├── acestep.py         # ACE-Step HTTP client + mock synthesizer
 │   └── imagegen.py        # sd.cpp image client + stdlib placeholder generator
-├── blueprints/            # artists, bands, albums, tracks, admin routes
+├── blueprints/            # artists, bands, albums, tracks, admin, api routes
 ├── templates/             # server-rendered Jinja (console aesthetic)
 ├── static/
 │   ├── css/style.css      # self-contained, system fonts, no web fonts
