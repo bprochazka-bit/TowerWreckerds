@@ -44,6 +44,11 @@ class LLMClient:
         except (TypeError, ValueError):
             self.max_tokens = 1500
         self.system_preamble = (s.get("llm_system_preamble", "") or "").strip()
+        # Append a per-call entropy token to every prompt so identical, low-entropy
+        # requests don't reconverge on the same output (see _vary). On by default;
+        # set llm_vary_prompts to a falsey value to disable.
+        self.vary_prompts = str(s.get("llm_vary_prompts", "1")).strip().lower() not in (
+            "0", "false", "no", "off", "")
         self.last_seed = None  # the seed used by the most recent chat() call
 
     # -- low level -----------------------------------------------------------
@@ -53,6 +58,24 @@ class LLMClient:
         if self.api_key:
             h["Authorization"] = f"Bearer {self.api_key}"
         return h
+
+    def _vary(self, user):
+        """Append a per-call entropy token to the user prompt.
+
+        A fresh sampler seed alone does NOT guarantee different output: for an
+        identical, low-entropy prompt ("invent an artist") the model reconverges
+        on the same high-probability tokens every time (hence four artists all
+        named "Elara Vance") regardless of the seed. Changing the prompt text
+        itself forces a different decode path. The token is the same value as the
+        sampler seed (so the two move together) and is placed at the END so the
+        system prompt and the bulk of the user prompt remain a stable, cacheable
+        prefix. The model is told to ignore its meaning — it exists only to break
+        prompt-identity between otherwise-identical calls."""
+        if not self.vary_prompts:
+            return user
+        return (f"{user}\n\n"
+                f"[entropy: {self.last_seed:08x} — a random token to vary your "
+                f"wording and choices on each call; ignore its literal meaning]")
 
     def chat(self, user, system=None, temperature=None, max_tokens=None, timeout=180,
              seed=None):
@@ -74,7 +97,7 @@ class LLMClient:
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": user})
+        messages.append({"role": "user", "content": self._vary(user)})
 
         if self.backend == "ollama":
             return self._chat_ollama(messages, temperature, max_tokens, timeout)

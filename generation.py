@@ -112,11 +112,33 @@ def _aslist(v):
 # Artist
 # ---------------------------------------------------------------------------
 
+def _existing_artist_names(limit=60):
+    """A bounded sample of names already in the world, so generators can be told
+    to avoid duplicating them (and avoid over-reusing a popular first name)."""
+    rows = query("SELECT DISTINCT name FROM artist WHERE name IS NOT NULL AND name != ''"
+                 " ORDER BY id DESC LIMIT ?", (limit,))
+    return [r["name"] for r in rows]
+
+
+def _avoid_names_line(label="artist"):
+    """A prompt line listing existing names to steer the model away from
+    duplicates. '' when the world is empty."""
+    names = _existing_artist_names()
+    if not names:
+        return ""
+    return (f"\nThese {label} names already exist in this world — do NOT reuse any "
+            f"of them, and avoid leaning on a first name that already appears "
+            f"repeatedly here; pick something distinct:\n{', '.join(names)}\n")
+
+
 def generate_artist(hints):
     """hints: dict with optional name, primary_genre, region, vibe."""
     llm = LLMClient()
     genres = ", ".join(_genre_names())
     asked = {k: v for k, v in hints.items() if v}
+    # If the user pinned an explicit name, honour it; otherwise steer away from
+    # names that already exist so the world doesn't fill up with duplicates.
+    avoid = "" if asked.get("name") else _avoid_names_line("artist")
     system = (
         "You are a music-world worldbuilder. Invent a believable recording artist "
         "with a distinct identity. Keep the persona vivid but grounded."
@@ -131,7 +153,7 @@ def generate_artist(hints):
 Choose primary_genre from this list when possible: {genres}.
 region drives accent and language, so pick a real place.
 {("Constraints from the user: " + str(asked)) if asked else "No constraints; surprise me."}
-"""
+{avoid}"""
     data = llm.generate_json(user, system=system)
     return _persist_artist(data)
 
