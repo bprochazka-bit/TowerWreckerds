@@ -112,18 +112,32 @@ def _aslist(v):
 # Artist
 # ---------------------------------------------------------------------------
 
-def _existing_artist_names(limit=60):
-    """A bounded sample of names already in the world, so generators can be told
-    to avoid duplicating them (and avoid over-reusing a popular first name)."""
-    rows = query("SELECT DISTINCT name FROM artist WHERE name IS NOT NULL AND name != ''"
-                 " ORDER BY id DESC LIMIT ?", (limit,))
-    return [r["name"] for r in rows]
+def _existing_names(table, limit=60, extra=None):
+    """A bounded sample of names already in `table` ('artist' or 'band'), plus any
+    `extra` names (e.g. ones rejected earlier in a regenerate loop) listed first,
+    so generators can be told to avoid duplicating them."""
+    rows = query(f"SELECT DISTINCT name FROM {table} WHERE name IS NOT NULL"
+                 f" AND name != '' ORDER BY id DESC LIMIT ?", (limit,))
+    names = [r["name"] for r in rows]
+    if extra:
+        # extras first, de-duped, case preserved
+        names = list(dict.fromkeys([e for e in extra if e] + names))
+    return names
 
 
-def _avoid_names_line(label="artist"):
-    """A prompt line listing existing names to steer the model away from
-    duplicates. '' when the world is empty."""
-    names = _existing_artist_names()
+def _name_exists(table, name):
+    """True if `name` already exists in `table` ('artist' or 'band'), case-insensitively."""
+    if not (name or "").strip():
+        return False
+    return query(f"SELECT 1 FROM {table} WHERE name = ? COLLATE NOCASE LIMIT 1",
+                 (name.strip(),), one=True) is not None
+
+
+def _avoid_names_line(table="artist", label=None, extra=None):
+    """A prompt line listing existing (and just-rejected) names to steer the model
+    away from duplicates. '' when there's nothing to avoid."""
+    label = label or table
+    names = _existing_names(table, extra=extra)
     if not names:
         return ""
     return (f"\nThese {label} names already exist in this world — do NOT reuse any "
@@ -131,19 +145,41 @@ def _avoid_names_line(label="artist"):
             f"repeatedly here; pick something distinct:\n{', '.join(names)}\n")
 
 
+def _generate_unique_name(table, gen_fn, attempts=4):
+    """Run `gen_fn(rejected)` until it returns a dict whose 'name' isn't already
+    in `table`, feeding each colliding name back as a negative on the next pass.
+
+    `gen_fn` takes the list of names rejected so far and must build its prompt's
+    avoid-list from it (via `_avoid_names_line(..., extra=rejected)`). Returns the
+    first novel result, or — if every attempt collides — the last one (best
+    effort; the negative list makes repeated collisions unlikely)."""
+    rejected = []
+    data = None
+    for _ in range(max(1, attempts)):
+        data = gen_fn(rejected)
+        name = _text(data.get("name")).strip()
+        if not name or not _name_exists(table, name):
+            return data
+        rejected.append(name)
+    return data
+
+
 def generate_artist(hints):
     """hints: dict with optional name, primary_genre, region, vibe."""
     llm = LLMClient()
     genres = ", ".join(_genre_names())
     asked = {k: v for k, v in hints.items() if v}
-    # If the user pinned an explicit name, honour it; otherwise steer away from
-    # names that already exist so the world doesn't fill up with duplicates.
-    avoid = "" if asked.get("name") else _avoid_names_line("artist")
+    pinned = bool(asked.get("name"))  # an explicit name is honoured as-is
     system = (
         "You are a music-world worldbuilder. Invent a believable recording artist "
         "with a distinct identity. Keep the persona vivid but grounded."
     )
-    user = f"""Create one musical artist as JSON with exactly these keys:
+
+    def gen(rejected):
+        # Steer away from names that already exist (and any rejected this loop) so
+        # the world doesn't fill up with duplicates — unless the user pinned a name.
+        avoid = "" if pinned else _avoid_names_line("artist", extra=rejected)
+        user = f"""Create one musical artist as JSON with exactly these keys:
   name, persona, backstory, region, primary_genre, secondary_genres (array of 0-2),
   gender (the lead vocal: one of female, male, androgynous),
   language (the language they sing in, based on region — e.g. English, Spanish),
@@ -154,7 +190,10 @@ Choose primary_genre from this list when possible: {genres}.
 region drives accent and language, so pick a real place.
 {("Constraints from the user: " + str(asked)) if asked else "No constraints; surprise me."}
 {avoid}"""
-    data = llm.generate_json(user, system=system)
+        return llm.generate_json(user, system=system)
+
+    # Honour a pinned name in a single pass; otherwise regenerate until unique.
+    data = gen([]) if pinned else _generate_unique_name("artist", gen)
     return _persist_artist(data)
 
 
@@ -206,8 +245,15 @@ def generate_band_from_scratch(hints):
     genres = ", ".join(_genre_names())
     size = int(hints.get("size") or 4)
     asked = {k: v for k, v in hints.items() if v and k != "size"}
+    pinned = bool(asked.get("name"))
     system = "You are a music-world worldbuilder inventing a coherent band and its lineup."
-    user = f"""Invent a band as JSON with keys:
+
+    def gen(rejected):
+        # Avoid existing band names (and any rejected this loop) for the band, and
+        # existing artist names for the members, unless a band name was pinned.
+        band_avoid = "" if pinned else _avoid_names_line("band", extra=rejected)
+        member_avoid = _avoid_names_line("artist", label="member")
+        return llm.generate_json(f"""Invent a band as JSON with keys:
   name, primary_genre, backstory,
   language (the language they sing in, based on origin — e.g. English, Spanish),
   members: array of exactly {size} objects, each with keys
@@ -217,8 +263,9 @@ Mark the lead singer's instrument as "lead vocals".
 Choose primary_genre from: {genres}.
 Members should feel like real people with chemistry and tension.
 {("Constraints: " + str(asked)) if asked else ""}
-"""
-    data = llm.generate_json(user, system=system)
+{band_avoid}{member_avoid}""", system=system)
+
+    data = gen([]) if pinned else _generate_unique_name("band", gen)
     band_id = execute(
         "INSERT INTO band (name, primary_genre, backstory, language, formed_on, created_at)"
         " VALUES (?,?,?,?,?,?)",
@@ -262,15 +309,20 @@ def generate_band_from_members(name_hint, genre_hint, member_specs):
                 "region": a["region"], "instrument": spec.get("instrument", ""),
             })
     system = "You name and frame a band based on its real, existing members."
-    user = f"""These musicians are forming a band:
+    pinned = bool(name_hint)
+
+    def gen(rejected):
+        avoid = "" if pinned else _avoid_names_line("band", extra=rejected)
+        return llm.generate_json(f"""These musicians are forming a band:
 {members}
 
 Return JSON with keys: name, primary_genre, backstory.
 {f'Prefer the name "{name_hint}".' if name_hint else ''}
 {f'Genre leans {genre_hint}.' if genre_hint else ''}
 The backstory should reference how these specific people came together.
-"""
-    data = llm.generate_json(user, system=system)
+{avoid}""", system=system)
+
+    data = gen([]) if pinned else _generate_unique_name("band", gen)
     band_id = execute(
         "INSERT INTO band (name, primary_genre, backstory, formed_on, created_at)"
         " VALUES (?,?,?,?,?)",
