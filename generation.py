@@ -509,15 +509,12 @@ Style cues: {cues or '(none)'}
 {('Lyric direction: ' + notes) if notes else ''}
 
 {lang_line}Write the lyrics with [verse]/[chorus] section tags, in this performer's voice
-and the {genre or 'song'}'s idiom — specific, not generic. Return JSON with a
-single key "lyrics" whose value is the lyric text.
+and the {genre or 'song'}'s idiom — specific, not generic. Output ONLY the lyric
+text itself — no JSON, no quotes, no commentary, no title line.
 {vary_line}
 {_lyric_guidance_block(genre, duration)}{LYRIC_RULES}
 """
-    data = llm.generate_json(user, system=system, temperature=_lyrics_temperature())
-    if isinstance(data, dict):
-        return _lyrics_text(data.get("lyrics") or data.get("text") or "")
-    return data if isinstance(data, str) else ""
+    return _lyrics_text(llm.generate_lyrics(user, system=system, temperature=_lyrics_temperature()))
 
 
 def _strip_lrc_timestamps(lyrics):

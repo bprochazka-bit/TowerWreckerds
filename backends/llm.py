@@ -161,6 +161,31 @@ class LLMClient:
         raw = self.chat(user, system=system, **kwargs)
         return _extract_json(raw)
 
+    def generate_lyrics(self, user, system=None, **kwargs):
+        """Generate lyric text, tolerant of how the model formats its reply.
+
+        Lyrics are plain text, so we do NOT force a JSON envelope: smaller /
+        MoE models (e.g. Qwen3-A3B) routinely ignore a "return JSON" instruction
+        and emit the lyric directly, which made the strict JSON parser raise
+        ("Could not parse JSON from model output"). This returns the lyric text
+        whether the model replied with bare text or wrapped it as
+        {"lyrics": "..."} — and never raises on a missing JSON wrapper."""
+        raw = self.chat(user, system=system, **kwargs)
+        text = _strip_reasoning(raw).strip()
+        # Unwrap an optional JSON object wrapper if the model happened to comply.
+        # Only attempt this for an object ('{'); lyrics legitimately start with a
+        # '[section]' tag, so we must not treat a leading '[' as a JSON array.
+        if text.startswith("{"):
+            try:
+                data = _extract_json(text)
+            except LLMError:
+                data = None
+            if isinstance(data, dict):
+                inner = data.get("lyrics") or data.get("text")
+                if inner:
+                    return "\n".join(str(x) for x in inner) if isinstance(inner, list) else str(inner)
+        return text
+
     def ping(self, timeout=8):
         try:
             if self.backend == "ollama":
@@ -173,10 +198,12 @@ class LLMClient:
             return False, str(exc)
 
 
-def _extract_json(text):
-    text = text.strip()
+def _strip_reasoning(text):
+    """Strip a reasoning model's <think> block and any surrounding code fence,
+    leaving the substantive payload. Shared by JSON and lyric extraction."""
+    text = (text or "").strip()
     # Reasoning models (Qwen3, DeepSeek-R1, ...) wrap their scratch work in
-    # <think>...</think>. Drop it before looking for JSON. Also drop a dangling
+    # <think>...</think>. Drop it before looking for content. Also drop a dangling
     # unterminated <think> with no closing tag (a truncated reasoning block).
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
     if "<think>" in text and "</think>" not in text:
@@ -185,6 +212,11 @@ def _extract_json(text):
     fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
     if fence:
         text = fence.group(1).strip()
+    return text
+
+
+def _extract_json(text):
+    text = _strip_reasoning(text)
     # Fast path.
     try:
         return json.loads(text)
